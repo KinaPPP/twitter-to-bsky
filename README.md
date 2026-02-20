@@ -1,3 +1,18 @@
+## Chrome Extension (by KinaPPP) — v0.14
+
+A Chrome Extension (Manifest V3) fork of this userscript.  
+Added: Threads support, image upload via catbox.moe, carousel posts, token expiry management, parallel posting.
+
+📁 **[chrome-extension/](./crosspost-extension)** フォルダをダウンロードして  
+`chrome://extensions/` → Developer mode → Load unpacked で使用できます。
+
+| Platform | Text | Images (up to 4) |
+|----------|------|-----------------|
+| 🦋 Bluesky  | ✅ | ✅ |
+| 🐘 Mastodon | ✅ | ✅ |
+| 🧵 Threads  | ✅ | ✅ via catbox.moe |
+
+---
 # twitter-to-bsky - crosspost from Twitter/X to Bluesky and Mastodon directly in the web browser
 
 twitter-to-bsky is a [userscript](https://en.wikipedia.org/wiki/Userscript) written for [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/get-it/) running in desktop web browsers (Chrome/Firefox/Edge).
