@@ -504,11 +504,13 @@
         }
       } else {
         // 一般URL → Twitter のカード DOM から情報を取得
-        const card = root.querySelector('[data-testid="card.wrapper"]');
+        // 自分のツイートにURLが含まれる場合のみカードを探す（タイムラインの他ツイートのカードを誤取得しないため）
+        const textUrl = text.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,!?]+$/, '');
+        const card = textUrl ? root.querySelector('[data-testid="card.wrapper"]') : null;
         if (card) {
           // カードのURL・タイトル・説明・サムネイルを DOM から取得
           const cardLink    = card.querySelector('a[href]');
-          const pageUrl     = cardLink?.href || text.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,!?]+$/, '');
+          const pageUrl     = cardLink?.href || textUrl;
           const cardTexts   = Array.from(card.querySelectorAll('span')).map(s => s.innerText.trim()).filter(Boolean);
           // Twitterカードのspan構造: [ドメイン, タイトル, 説明] or [ドメイン, タイトル]
           // ドメインらしい文字列（.を含む短いテキスト）をスキップして最初の長いテキストをタイトルとする
