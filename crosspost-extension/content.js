@@ -370,6 +370,73 @@
   }
 
   // ----------------------------------------------------------------
+  //  OGP 取得（一般URL用 Bluesky カード）
+  //  background.js 経由で fetch → CORS 回避
+  // ----------------------------------------------------------------
+  async function fetchOgp(url) {
+    try {
+      // OGP取得専用: 10秒でタイムアウト（通常の bgFetch は60秒）
+      const resp = await new Promise((resolve, reject) => {
+        const id   = ++_portIdCounter;
+        const port = chrome.runtime.connect({ name: 'crosspost-fetch' });
+        const timer = setTimeout(() => {
+          port.disconnect();
+          reject(new Error('OGP fetch timeout (10s)'));
+        }, 10000);
+        port.onMessage.addListener((msg) => {
+          if (msg.id !== id) return;
+          clearTimeout(timer);
+          port.disconnect();
+          resolve(msg);
+        });
+        port.onDisconnect.addListener(() => {
+          clearTimeout(timer);
+          resolve({ ok: false, text: '' }); // タイムアウト時はエラーにしない
+        });
+        port.postMessage({ type: 'FETCH', id, url, method: 'GET', headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
+        }});
+      });
+      const html = resp.text || (typeof resp.data === 'string' ? resp.data : '') || '';
+
+      const getMeta = (prop) => {
+        // og: プロパティ
+        const ogMatch = html.match(new RegExp(`<meta[^>]+property=["']og:${prop}["'][^>]+content=["']([^"']+)["']`, 'i'))
+                     || html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:${prop}["']`, 'i'));
+        if (ogMatch) return ogMatch[1];
+        // name= フォールバック（description など）
+        const nameMatch = html.match(new RegExp(`<meta[^>]+name=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'))
+                       || html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+name=["']${prop}["']`, 'i'));
+        return nameMatch ? nameMatch[1] : null;
+      };
+
+      // title フォールバック: <title> タグ
+      const titleTag = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+
+      const title       = getMeta('title')       || (titleTag ? titleTag[1].trim() : null);
+      const description = getMeta('description') || '';
+      const imageUrl    = getMeta('image');
+
+
+      // HTML エンティティのデコード
+      const decode = (str) => str
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&nbsp;/g, ' ');
+
+      return {
+        title:       decode(title),
+        description: decode(description),
+        imageUrl,
+      };
+    } catch (e) {
+      console.warn('[Crosspost] OGP fetch failed:', e.message);
+      return null;
+    }
+  }
+
+  // ----------------------------------------------------------------
   //  Bluesky 投稿
   //  【並列】複数画像を同時アップロード
   // ----------------------------------------------------------------
@@ -409,6 +476,7 @@
 
     } else {
       const ytMatch = text.match(RE_YOUTUBE);
+      // YouTube URL
       if (ytMatch) {
         const videoId = ytMatch[1];
         const ytUrl   = `https://www.youtube.com/watch?v=${videoId}`;
@@ -433,6 +501,51 @@
             $type: 'app.bsky.embed.external',
             external: { uri: ytUrl, title, description, thumb: upResp.data?.blob },
           };
+        }
+      } else {
+        // 一般URL → Twitter のカード DOM から情報を取得
+        const card = root.querySelector('[data-testid="card.wrapper"]');
+        if (card) {
+          // カードのURL・タイトル・説明・サムネイルを DOM から取得
+          const cardLink    = card.querySelector('a[href]');
+          const pageUrl     = cardLink?.href || text.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,!?]+$/, '');
+          const cardTexts   = Array.from(card.querySelectorAll('span')).map(s => s.innerText.trim()).filter(Boolean);
+          // Twitterカードのspan構造: [ドメイン, タイトル, 説明] or [ドメイン, タイトル]
+          // ドメインらしい文字列（.を含む短いテキスト）をスキップして最初の長いテキストをタイトルとする
+          const nonDomain   = cardTexts.filter(t => t.length > 30 || (!t.includes('.') && t.length > 5));
+          const title       = nonDomain[0] || cardTexts[1] || cardTexts[0] || '';
+          const description = nonDomain[1] || cardTexts[2] || '';
+          // サムネイル画像（card内のimg）
+          const cardImg     = card.querySelector('img[src]');
+
+          if (pageUrl && title) {
+            let thumb;
+            if (cardImg?.src) {
+              try {
+                const imgResp = await bgFetch({ url: cardImg.src, method: 'GET', responseType: 'binary' });
+                if (imgResp.base64) {
+                  let imgBlob = await (async () => {
+                    const buf = Uint8Array.from(atob(imgResp.base64), c => c.charCodeAt(0)).buffer;
+                    return new Blob([buf], { type: imgResp.mimeType || 'image/jpeg' });
+                  })();
+                  imgBlob = await compressForBsky(imgBlob);
+                  const b64 = await blobToBase64(imgBlob);
+                  const upResp = await bgFetch({
+                    url: 'https://bsky.social/xrpc/com.atproto.repo.uploadBlob', method: 'POST',
+                    headers: { 'Authorization': `Bearer ${auth.accessJwt}`, 'Content-Type': imgBlob.type },
+                    body: b64, bodyType: 'base64',
+                  });
+                  thumb = upResp.data?.blob;
+                }
+              } catch (e) {
+                console.warn('[Crosspost] card image upload failed:', e.message);
+              }
+            }
+            embed = {
+              $type: 'app.bsky.embed.external',
+              external: { uri: pageUrl, title, description, thumb },
+            };
+          }
         }
       }
     }

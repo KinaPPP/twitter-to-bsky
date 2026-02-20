@@ -83,6 +83,7 @@ All three platforms are posted in **parallel** for maximum speed.
 
 | Version | Changes |
 |---------|---------|
+| v0.18 | OGP card embed for general URLs on Bluesky (title, description, thumbnail) |
 | v0.17 | Progressive image compression for Bluesky (auto-resize until under 976KB) |
 | v0.16 | Uploader selector (catbox.moe / litterbox), restrict host_permissions, fix description version |
 | v0.15 | Wider popup (420px) and larger font sizes for readability |

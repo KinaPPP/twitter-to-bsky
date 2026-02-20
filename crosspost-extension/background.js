@@ -69,7 +69,13 @@ async function handleFetch({ url, method = 'GET', headers = {}, body, bodyType, 
     }
   }
 
-  const response = await fetch(url, { method, headers: finalHeaders, body: fetchBody });
+  let response;
+  try {
+    response = await fetch(url, { method, headers: finalHeaders, body: fetchBody });
+  } catch (fetchErr) {
+    console.error('[BG] fetch error:', url, fetchErr.message);
+    return { ok: false, status: 0, text: '', error: fetchErr.message };
+  }
   const contentType = response.headers.get('Content-Type') || '';
 
   if (responseType === 'binary' || responseType === 'blob') {
