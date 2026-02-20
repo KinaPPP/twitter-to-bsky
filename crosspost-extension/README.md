@@ -83,6 +83,8 @@ All three platforms are posted in **parallel** for maximum speed.
 
 | Version | Changes |
 |---------|---------|
+| v0.17 | Progressive image compression for Bluesky (auto-resize until under 976KB) |
+| v0.16 | Uploader selector (catbox.moe / litterbox), restrict host_permissions, fix description version |
 | v0.15 | Wider popup (420px) and larger font sizes for readability |
 | v0.14 | Auto-reload Twitter tab after saving settings |
 | v0.13 | Dedicated crosspost bar below Twitter toolbar (Plan A UI) |

@@ -77,6 +77,8 @@ chrome.storage.sync.get({
   bsky_app_password:           '',
   bsky_crosspost_checked:      false,
   bsky_visible:                true,
+  uploader:                    'catbox',
+  litterbox_time:              '24h',
   mastodon_instance_url:       'https://mastodon.social',
   mastodon_api_key:            '',
   mastodon_crosspost_checked:  false,
@@ -97,12 +99,24 @@ chrome.storage.sync.get({
   $('tu').value    = items.threads_user_id;
   $('tdf').checked = items.threads_crosspost_checked;
   $('bv').checked  = items.bsky_visible;
+  // アップローダー設定
+  const ulRadio = document.querySelector(`input[name="uploader"][value="${items.uploader}"]`);
+  if (ulRadio) ulRadio.checked = true;
+  $('litterbox-time').value = items.litterbox_time;
+  $('litterbox-opts').style.display = items.uploader === 'litterbox' ? '' : 'none';
   $('mv').checked  = items.mastodon_visible;
   $('tv').checked  = items.threads_visible;
   updateExpiryUI(items.threads_token_issued_at, items.threads_access_token);
 });
 
 $('tt').addEventListener('input', () => updateExpiryUI('', $('tt').value.trim() || null));
+
+// アップローダー切り替え
+document.querySelectorAll('input[name="uploader"]').forEach(r => {
+  r.addEventListener('change', () => {
+    $('litterbox-opts').style.display = r.value === 'litterbox' ? '' : 'none';
+  });
+});
 
 // ----------------------------------------------------------------
 //  catbox.moe 接続テスト
@@ -217,6 +231,8 @@ $('sv').addEventListener('click', () => {
       threads_crosspost_checked:   $('tdf').checked,
       threads_token_issued_at:     isNewToken ? new Date().toISOString() : prev.threads_token_issued_at,
       bsky_visible:                $('bv').checked,
+      uploader:                    document.querySelector('input[name="uploader"]:checked')?.value || 'catbox',
+      litterbox_time:              $('litterbox-time').value,
       mastodon_visible:            $('mv').checked,
       threads_visible:             $('tv').checked,
     }, () => {

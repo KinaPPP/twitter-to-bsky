@@ -92,6 +92,22 @@
     .toggle-show input[type="checkbox"] { width: 13px; height: 13px; cursor: pointer; accent-color: var(--success); }
     .toggle-show:has(input:checked) { background: rgba(63,185,80,0.1); border-color: rgba(63,185,80,0.4); color: var(--success); }
 
+
+    .uploader-radio {
+      flex: 1; display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--border); cursor: pointer;
+      font-size: 12px; color: var(--muted);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .uploader-radio input[type="radio"] { accent-color: var(--catbox); flex-shrink: 0; }
+    .uploader-radio:has(input:checked) {
+      background: rgba(245,166,35,0.1);
+      border-color: rgba(245,166,35,0.4);
+      color: var(--catbox);
+    }
+    .uploader-radio small { font-size: 10px; opacity: 0.7; display: block; }
+
     .section[data-platform="bsky"]     .section-header { border-left: 3px solid var(--bsky); }
     .section[data-platform="mastodon"] .section-header { border-left: 3px solid var(--mast); }
     .section[data-platform="threads"]  .section-header { border-left: 3px solid #aaa; }
@@ -203,7 +219,7 @@
 <body>
   <header>
     <h1>⚡ Crosspost</h1>
-    <span class="badge">v0.15</span>
+    <span class="badge">v0.17</span>
   </header>
 
   <div class="help-links">
@@ -274,24 +290,43 @@
       </div>
     </div>
 
-    <!-- catbox.moe（Threads 画像投稿用） -->
+    <!-- 画像アップローダー（Threads 画像投稿用） -->
     <div class="section" data-platform="catbox">
       <div class="section-header">
         <span class="platform-icon">
-          📦 catbox.moe
+          📦 画像アップローダー
           <span style="font-size:11px;opacity:0.6;">Threads 画像中継</span>
         </span>
         <span class="catbox-badge"><span class="dot"></span>設定不要</span>
       </div>
       <div class="section-body">
+        <!-- アップローダー選択 -->
+        <div style="display:flex;gap:8px;">
+          <label class="uploader-radio">
+            <input type="radio" name="uploader" id="ul-catbox" value="catbox" checked>
+            <span>📦 catbox.moe<br><small>永久保存</small></span>
+          </label>
+          <label class="uploader-radio">
+            <input type="radio" name="uploader" id="ul-litterbox" value="litterbox">
+            <span>🗂 litterbox<br><small>期限付き</small></span>
+          </label>
+        </div>
+        <!-- litterbox 有効期限（litterbox選択時のみ表示） -->
+        <div id="litterbox-opts" style="display:none;">
+          <select id="litterbox-time" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;outline:none;">
+            <option value="1h">1時間後に削除</option>
+            <option value="12h">12時間後に削除</option>
+            <option value="24h" selected>1日後に削除</option>
+            <option value="72h">3日後に削除</option>
+          </select>
+          <p class="hint" style="color:var(--success);">✓ Threads投稿後はMetaのCDNに保存されるため、期限切れ後も投稿画像は表示されます。</p>
+        </div>
         <div class="catbox-test-row">
           <button class="test-btn" id="catbox-test-btn" style="width:100%;">📡 接続テスト</button>
         </div>
         <div class="test-result" id="catbox-test-result"></div>
         <p class="hint">
-          Threads への画像投稿は <strong style="color:#ccc">アカウント不要・完全無料</strong> の
-          <a href="https://catbox.moe" target="_blank">catbox.moe</a> を中継サーバーとして使用します。<br>
-          blob画像 → catbox.moe（公開URL） → Threads API という流れで送信。<br>
+          アカウント不要・完全無料。blob画像 → アップローダー（公開URL）→ Threads API の流れで送信。<br>
           最大 <strong style="color:#ccc">4枚</strong> 同時投稿（2枚以上はカルーセル形式）。
         </p>
       </div>

@@ -38,6 +38,8 @@
       bsky_visible:               true,
       mastodon_visible:           true,
       threads_visible:            true,
+      uploader:                   'catbox',
+      litterbox_time:             '24h',
     }, (items) => { settings = items; resolve(items); });
   });
 
@@ -87,7 +89,7 @@
   // ----------------------------------------------------------------
   //  画像リサイズ
   // ----------------------------------------------------------------
-  const resize_image = (blob, maxPx = 1280) => new Promise((resolve) => {
+  const resize_image = (blob, maxPx = 1280, quality = 0.90) => new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = document.createElement('img');
@@ -100,7 +102,7 @@
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        canvas.toBlob(resolve, 'image/jpeg', 0.90);
+        canvas.toBlob(resolve, 'image/jpeg', quality);
       };
       img.src = e.target.result;
     };
@@ -108,34 +110,85 @@
   });
 
   // ----------------------------------------------------------------
-  //  catbox.moe アップロード（1枚）
+  //  Bluesky 用: 976KB 以下になるまで段階的に圧縮
+  //  Bluesky の uploadBlob 上限は 976.56KB (1,000,000 bytes)
   // ----------------------------------------------------------------
-  async function uploadToCatbox(blob) {
-    if (blob.size > 50 * 1024 * 1024) blob = await resize_image(blob);
-    const b64  = await blobToBase64(blob);
-    const resp = await bgFetch({
-      url:      'https://catbox.moe/user/api.php',
-      method:   'POST',
-      headers:  {},
-      body: {
-        reqtype:      'fileupload',
-        fileToUpload: { __type: 'blob', data: b64, mimeType: blob.type, filename: 'image.jpg' },
-      },
-      bodyType: 'formdata',
-    });
-    const url = (resp.text || resp.data || '').toString().trim();
-    if (!url.startsWith('https://files.catbox.moe/')) {
-      throw new Error(`catbox.moe アップロード失敗: ${url || 'レスポンスなし'}`);
+  const BSKY_MAX_BYTES = 976 * 1024; // 976KB
+
+  const compressForBsky = async (blob) => {
+    // 段階的な圧縮パラメータ: [最大px, 品質]
+    const steps = [
+      [1280, 0.90],
+      [1280, 0.80],
+      [1024, 0.80],
+      [1024, 0.70],
+      [ 800, 0.75],
+      [ 800, 0.65],
+      [ 640, 0.70],
+    ];
+
+    if (blob.size <= BSKY_MAX_BYTES) return blob;
+
+    for (const [maxPx, quality] of steps) {
+      const resized = await resize_image(blob, maxPx, quality);
+      console.log(`[Crosspost] Bsky compress: ${maxPx}px q${quality} → ${Math.round(resized.size / 1024)}KB`);
+      if (resized.size <= BSKY_MAX_BYTES) return resized;
     }
-    return url;
+    // 最終手段: 最小設定で強制圧縮
+    return await resize_image(blob, 640, 0.60);
+  };
+
+  // ----------------------------------------------------------------
+  //  画像アップロード（catbox.moe または litterbox.catbox.moe）
+  // ----------------------------------------------------------------
+  async function uploadToHost(blob) {
+    if (blob.size > 50 * 1024 * 1024) blob = await resize_image(blob);
+    const b64 = await blobToBase64(blob);
+
+    if (settings.uploader === 'litterbox') {
+      // litterbox.catbox.moe: 期限付きアップロード（最大1GB）
+      const resp = await bgFetch({
+        url:      'https://litterbox.catbox.moe/resources/internals/api.php',
+        method:   'POST',
+        headers:  {},
+        body: {
+          reqtype:      'fileupload',
+          time:         settings.litterbox_time || '24h',
+          fileToUpload: { __type: 'blob', data: b64, mimeType: blob.type, filename: 'image.jpg' },
+        },
+        bodyType: 'formdata',
+      });
+      const url = (resp.text || resp.data || '').toString().trim();
+      if (!url.startsWith('https://files.catbox.moe/') && !url.startsWith('https://litter.catbox.moe/')) {
+        throw new Error(`litterbox アップロード失敗: ${url || 'レスポンスなし'}`);
+      }
+      return url;
+    } else {
+      // catbox.moe: 永久保存
+      const resp = await bgFetch({
+        url:      'https://catbox.moe/user/api.php',
+        method:   'POST',
+        headers:  {},
+        body: {
+          reqtype:      'fileupload',
+          fileToUpload: { __type: 'blob', data: b64, mimeType: blob.type, filename: 'image.jpg' },
+        },
+        bodyType: 'formdata',
+      });
+      const url = (resp.text || resp.data || '').toString().trim();
+      if (!url.startsWith('https://files.catbox.moe/')) {
+        throw new Error(`catbox.moe アップロード失敗: ${url || 'レスポンスなし'}`);
+      }
+      return url;
+    }
   }
 
   // ----------------------------------------------------------------
-  //  【並列】catbox.moe への複数画像アップロード
+  //  【並列】複数画像アップロード
   // ----------------------------------------------------------------
-  async function uploadAllToCatbox(images) {
+  async function uploadAllToHost(images) {
     return Promise.all(
-      images.map(img => fetch(img.src).then(r => r.blob()).then(uploadToCatbox))
+      images.map(img => fetch(img.src).then(r => r.blob()).then(uploadToHost))
     );
   }
 
@@ -256,8 +309,9 @@
     }
 
     // 【並列】catbox.moe に全画像を同時アップロード
-    showToast(`画像をアップロード中… (${targetImages.length}枚)`, 'info');
-    const catboxUrls = await uploadAllToCatbox(targetImages);
+    const uploaderName = settings.uploader === 'litterbox' ? 'litterbox' : 'catbox.moe';
+    showToast(`${uploaderName} に画像をアップロード中… (${targetImages.length}枚)`, 'info');
+    const catboxUrls = await uploadAllToHost(targetImages);
     console.log('[Crosspost] catbox URLs:', catboxUrls);
 
     // ---- 画像 1 枚: IMAGE 投稿 ----
@@ -341,7 +395,7 @@
       );
       const embeds = (await Promise.all(
         blobList.map(async (blob) => {
-          if (blob.size > 1000000) blob = await resize_image(blob);
+          blob = await compressForBsky(blob);
           const b64 = await blobToBase64(blob);
           const upResp = await bgFetch({
             url: 'https://bsky.social/xrpc/com.atproto.repo.uploadBlob', method: 'POST',

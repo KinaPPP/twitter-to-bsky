@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Crosspost to Bluesky / Mastodon / Threads",
-  "version": "0.15",
-  "description": "Twitter/X への投稿を Bluesky・Mastodon・Threads に同時クロスポスト (v0.10)",
+  "version": "0.17",
+  "description": "Twitter/X への投稿を Bluesky・Mastodon・Threads に同時クロスポスト (v0.17)",
   "permissions": [
     "storage",
     "tabs"
@@ -15,10 +15,11 @@
     "https://graph.threads.net/*",
     "https://*.mastodon.social/*",
     "https://img.youtube.com/*",
-    "https://*/*",
+    "https://www.youtube.com/*",
     "https://catbox.moe/*",
     "https://files.catbox.moe/*",
-    "https://www.youtube.com/*"
+    "https://litterbox.catbox.moe/*",
+    "https://litter.catbox.moe/*"
   ],
   "content_scripts": [
     {
