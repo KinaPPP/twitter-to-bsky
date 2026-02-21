@@ -83,6 +83,7 @@ All three platforms are posted in **parallel** for maximum speed.
 
 | Version | Changes |
 |---------|---------|
+| v0.20 | Auto-uncheck crosspost boxes in reply mode (placeholder + DOM detection, JP/EN) |
 | v0.19 | Grey light theme for settings popup, add homepage_url to manifest |
 | v0.18 | OGP card embed for general URLs on Bluesky (title, description, thumbnail) |
 | v0.17 | Progressive image compression for Bluesky (auto-resize until under 976KB) |

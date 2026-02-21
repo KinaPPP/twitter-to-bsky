@@ -238,7 +238,7 @@ $('sv').addEventListener('click', () => {
     }, () => {
       const msg = $('status');
       msg.textContent = '✓ 保存しました';
-      setTimeout(() => { msg.textContent = ''; }, 2500);
+      setTimeout(() => { window.close(); }, 800);
       chrome.storage.sync.get(['threads_token_issued_at', 'threads_access_token'], (s) => {
         updateExpiryUI(s.threads_token_issued_at, s.threads_access_token);
       });

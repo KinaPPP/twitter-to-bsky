@@ -702,6 +702,52 @@
   };
 
   // ----------------------------------------------------------------
+  //  返信モード判定
+  //  案B: 投稿エリア内に返信先ツイートが存在するか
+  //  案C: テキストエリアのプレースホルダーで判定
+  // ----------------------------------------------------------------
+  const isReplyMode = (toolbarEl) => {
+    const root = toolbarEl.closest('div[role="dialog"]')
+               || toolbarEl.closest('div[data-testid="primaryColumn"]')
+               || document.body;
+
+    // 案C: プレースホルダーで判定（日本語・英語）
+    const REPLY_PLACEHOLDERS = [
+      '返信をポスト',          // Twitter JP (現在)
+      '返信をツイート',        // Twitter JP (旧)
+      'Tweet your reply',     // Twitter EN
+      'Post your reply',      // Twitter EN (新)
+      'Reply',                // 短縮形
+      '返信する',
+    ];
+    const POST_PLACEHOLDERS = [
+      'いまどうしてる？',      // Twitter JP (現在)
+      '今どうしてる？',        // Twitter JP (旧)
+      "What's happening?",    // Twitter EN
+      "What's on your mind?",
+    ];
+    // 案C: プレースホルダーによる判定（Twitter は aria-label に値が出ないため現状スキップ）
+    // 将来Twitterが属性を変更した場合に備えて残しておく
+    const textarea = root.querySelector('[data-testid="tweetTextarea_0"]');
+    if (textarea) {
+      const placeholder = textarea.getAttribute('aria-placeholder') || '';
+      if (REPLY_PLACEHOLDERS.some(p => placeholder.includes(p))) return true;
+      if (POST_PLACEHOLDERS.some(p => placeholder.includes(p))) return false;
+    }
+
+    // 案B: 投稿エリアの兄弟・親に返信先ツイートが存在するか
+    const tweetBlock = toolbarEl.closest('[data-testid="toolBar"]')?.closest('div');
+    if (tweetBlock) {
+      const hasReplyTarget = !!tweetBlock.querySelector('[data-testid="tweet"]')
+                          || !!tweetBlock.parentElement?.querySelector('[data-testid="tweet"]')
+                          || !!root.querySelector('[data-testid="tweet"]');
+      if (hasReplyTarget) return true;
+    }
+
+    return false;
+  };
+
+  // ----------------------------------------------------------------
   //  DOM セットアップ
   // ----------------------------------------------------------------
   const setup = () => {
@@ -732,8 +778,12 @@
         { cls: 'cross-threads-cb', checked: settings.threads_crosspost_checked,   visible: settings.threads_visible,   emoji: '🧵', label: 'Threads'  },
       ];
 
+      // 返信モードの場合はチェックを強制OFF
+      const replyMode = isReplyMode(tb);
+
       platforms.forEach(({ cls, checked, visible, emoji, label }) => {
         if (!visible) return;
+        const effectiveChecked = replyMode ? false : checked;
         const lbl = document.createElement('label');
         lbl.title = label;
         lbl.style.cssText = [
@@ -752,7 +802,7 @@
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.className = cls;
-        cb.checked = checked;
+        cb.checked = effectiveChecked;
         cb.style.cssText = 'width:13px;height:13px;cursor:pointer;accent-color:#1d9bf0;';
         const span = document.createElement('span');
         span.textContent = emoji + ' ' + label;
