@@ -707,9 +707,11 @@
   //  案C: テキストエリアのプレースホルダーで判定
   // ----------------------------------------------------------------
   const isReplyMode = (toolbarEl) => {
-    const root = toolbarEl.closest('div[role="dialog"]')
-               || toolbarEl.closest('div[data-testid="primaryColumn"]')
-               || document.body;
+    // ダイアログ内にいない場合は返信モードではない
+    const dialog = toolbarEl.closest('div[role="dialog"]');
+    if (!dialog) return false;
+
+    const root = dialog;
 
     // 案C: プレースホルダーで判定（日本語・英語）
     const REPLY_PLACEHOLDERS = [
