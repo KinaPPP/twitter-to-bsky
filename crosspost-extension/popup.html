@@ -6,17 +6,17 @@
   <title>Crosspost Settings</title>
   <style>
     :root {
-      --bg:      #0f1117;
-      --surface: #161b22;
-      --border:  #30363d;
-      --text:    #e6edf3;
-      --muted:   #8b949e;
-      --bsky:    #0085ff;
-      --mast:    #6364ff;
-      --catbox:  #f5a623;
-      --success: #3fb950;
-      --warning: #d29922;
-      --danger:  #f85149;
+      --bg:      #e8e8e8;
+      --surface: #f7f7f7;
+      --border:  #d0d0d0;
+      --text:    #1a1a1a;
+      --muted:   #666666;
+      --bsky:    #1a7fd4;
+      --mast:    #5a5ccc;
+      --catbox:  #c47f00;
+      --success: #2e9e6b;
+      --warning: #c07000;
+      --danger:  #d93025;
       --radius:  8px;
     }
 
@@ -38,7 +38,7 @@
     header h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
     header .badge {
       font-size: 11px; padding: 2px 8px; border-radius: 20px;
-      background: #21262d; color: var(--muted);
+      background: #ddd; color: var(--muted);
     }
 
     .sections { padding: 12px 20px 16px; display: flex; flex-direction: column; gap: 16px; }
@@ -67,17 +67,17 @@
     .section-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
 
     input[type="text"], input[type="password"] {
-      width: 100%; background: var(--bg); color: var(--text);
+      width: 100%; background: #fff; color: var(--text);
       border: 1px solid var(--border); border-radius: 6px;
       padding: 8px 10px; font-size: 13px; outline: none;
       transition: border-color 0.15s;
     }
-    input[type="text"]:focus, input[type="password"]:focus { border-color: #388bfd; }
+    input[type="text"]:focus, input[type="password"]:focus { border-color: #4a8ce0; }
     input::placeholder { color: var(--muted); }
 
     .hint { font-size: 11px; color: var(--muted); line-height: 1.5; padding: 4px 0 0; }
-    .hint a { color: #388bfd; text-decoration: none; }
-    .hint code { font-size: 10px; background: #21262d; padding: 1px 4px; border-radius: 3px; word-break: break-all; }
+    .hint a { color: #3a7bd5; text-decoration: none; }
+    .hint code { font-size: 10px; background: #ddd; padding: 1px 4px; border-radius: 3px; word-break: break-all; }
 
 
     .header-controls { display: flex; align-items: center; gap: 10px; }
@@ -117,12 +117,12 @@
     .catbox-test-row { display: flex; gap: 6px; align-items: center; }
     .test-btn {
       flex-shrink: 0; padding: 6px 12px;
-      background: #21262d; color: var(--text);
+      background: #e0e0e0; color: var(--text);
       border: 1px solid var(--border); border-radius: 6px;
       font-size: 12px; font-weight: 600; cursor: pointer;
       transition: background 0.15s; white-space: nowrap;
     }
-    .test-btn:hover:not(:disabled) { background: #2d333b; }
+    .test-btn:hover:not(:disabled) { background: #d4d4d4; }
     .test-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .test-btn.loading { animation: none; }
     .test-result { font-size: 11px; min-height: 14px; }
@@ -145,7 +145,7 @@
 
     /* Threads トークン管理パネル */
     .token-manager {
-      background: #0d1117; border: 1px solid var(--border);
+      background: #efefef; border: 1px solid var(--border);
       border-radius: 6px; overflow: hidden;
     }
     .token-status-bar {
@@ -167,16 +167,16 @@
     .expiry-text.expired{ color: var(--danger); }
 
     .token-progress-wrap { padding: 0 10px 6px; }
-    .token-progress-bar  { height: 3px; border-radius: 2px; background: #21262d; overflow: hidden; }
+    .token-progress-bar  { height: 3px; border-radius: 2px; background: #ccc; overflow: hidden; }
     .token-progress-fill { height: 100%; border-radius: 2px; transition: width 0.5s, background 0.5s; }
 
     .refresh-btn {
-      flex-shrink: 0; padding: 5px 11px; background: #21262d; color: var(--text);
+      flex-shrink: 0; padding: 5px 11px; background: #e0e0e0; color: var(--text);
       border: 1px solid var(--border); border-radius: 5px;
       font-size: 12px; font-weight: 600; cursor: pointer;
       transition: background 0.15s; display: flex; align-items: center; gap: 5px; white-space: nowrap;
     }
-    .refresh-btn:hover:not(:disabled) { background: #2d333b; border-color: #8b949e; }
+    .refresh-btn:hover:not(:disabled) { background: #d4d4d4; border-color: #999; }
     .refresh-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .refresh-btn .spin-icon { display: inline-block; font-style: normal; }
     .refresh-btn.loading .spin-icon { animation: spin 0.7s linear infinite; }
@@ -189,7 +189,7 @@
     footer { padding: 0 20px 16px; }
     .save-btn {
       width: 100%; padding: 10px;
-      background: linear-gradient(135deg, #1f6feb, #388bfd);
+      background: linear-gradient(135deg, #3a7bd5, #4a8ce0);
       color: white; border: none; border-radius: var(--radius);
       font-size: 14px; font-weight: 700; cursor: pointer;
       transition: opacity 0.15s, transform 0.1s;
@@ -207,11 +207,11 @@
 
     .shortcut-tip {
       margin: 0 20px 12px; padding: 8px 12px;
-      background: #161b22; border: 1px solid var(--border);
+      background: #f0f0f0; border: 1px solid var(--border);
       border-radius: var(--radius); font-size: 12px; color: var(--muted); text-align: center;
     }
     kbd {
-      background: #21262d; border: 1px solid #444c56;
+      background: #ddd; border: 1px solid #bbb;
       border-radius: 4px; padding: 1px 6px; font-size: 12px; color: var(--text);
     }
   </style>
@@ -219,7 +219,7 @@
 <body>
   <header>
     <h1>⚡ Crosspost</h1>
-    <span class="badge">v0.18</span>
+    <span class="badge">v0.19</span>
   </header>
 
   <div class="help-links">
@@ -313,7 +313,7 @@
         </div>
         <!-- litterbox 有効期限（litterbox選択時のみ表示） -->
         <div id="litterbox-opts" style="display:none;">
-          <select id="litterbox-time" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;outline:none;">
+          <select id="litterbox-time" style="width:100%;background:#fff;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;outline:none;">
             <option value="1h">1時間後に削除</option>
             <option value="12h">12時間後に削除</option>
             <option value="24h" selected>1日後に削除</option>

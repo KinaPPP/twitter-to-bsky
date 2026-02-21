@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Crosspost to Bluesky / Mastodon / Threads",
-  "version": "0.18",
-  "description": "Twitter/X への投稿を Bluesky・Mastodon・Threads に同時クロスポスト (v0.18)",
+  "version": "0.19",
+  "description": "Twitter/X への投稿を Bluesky・Mastodon・Threads に同時クロスポスト (v0.19)",
   "permissions": [
     "storage",
     "tabs"
@@ -50,5 +50,6 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "homepage_url": "https://github.com/KinaPPP/twitter-to-bsky"
 }
