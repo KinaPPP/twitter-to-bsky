@@ -19,7 +19,14 @@
     "https://catbox.moe/*",
     "https://files.catbox.moe/*",
     "https://litterbox.catbox.moe/*",
-    "https://litter.catbox.moe/*"
+    "https://litter.catbox.moe/*",
+    "https://open.spotify.com/*",
+    "https://www.amazon.co.jp/*",
+    "https://www.amazon.com/*",
+    "https://store.steampowered.com/*",
+    "https://www.nintendo.com/*",
+    "https://www.playstation.com/*",
+    "https://news.xbox.com/*"
   ],
   "content_scripts": [
     {

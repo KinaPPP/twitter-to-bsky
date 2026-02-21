@@ -370,6 +370,40 @@
   }
 
   // ----------------------------------------------------------------
+  //  Bluesky external embed 生成ヘルパー
+  //  （Twitterカード・OGP共通でカードデータを Bluesky にアップロード）
+  // ----------------------------------------------------------------
+  async function buildExternalEmbed(auth, uri, title, description, imageUrl) {
+    let thumb;
+    if (imageUrl) {
+      try {
+        const imgUrl = imageUrl.startsWith('http') ? imageUrl : new URL(imageUrl, uri).href;
+        const imgResp = await bgFetch({ url: imgUrl, method: 'GET', responseType: 'binary' });
+        if (imgResp.base64) {
+          let imgBlob = await (async () => {
+            const buf = Uint8Array.from(atob(imgResp.base64), c => c.charCodeAt(0)).buffer;
+            return new Blob([buf], { type: imgResp.mimeType || 'image/jpeg' });
+          })();
+          imgBlob = await compressForBsky(imgBlob);
+          const b64 = await blobToBase64(imgBlob);
+          const upResp = await bgFetch({
+            url: 'https://bsky.social/xrpc/com.atproto.repo.uploadBlob', method: 'POST',
+            headers: { 'Authorization': `Bearer ${auth.accessJwt}`, 'Content-Type': imgBlob.type },
+            body: b64, bodyType: 'base64',
+          });
+          thumb = upResp.data?.blob;
+        }
+      } catch (e) {
+        console.warn('[Crosspost] embed image upload failed:', e.message);
+      }
+    }
+    return {
+      $type: 'app.bsky.embed.external',
+      external: { uri, title, description: description || '', thumb },
+    };
+  }
+
+  // ----------------------------------------------------------------
   //  OGP 取得（一般URL用 Bluesky カード）
   //  background.js 経由で fetch → CORS 回避
   // ----------------------------------------------------------------
@@ -504,9 +538,22 @@
         }
       } else {
         // 一般URL → Twitter のカード DOM から情報を取得
-        // 自分のツイートにURLが含まれる場合のみカードを探す（タイムラインの他ツイートのカードを誤取得しないため）
+        // 自分のツイートにURLが含まれる場合のみカードを探す
+        // root全体（primaryColumn）ではなく投稿エリア直近に絞ることで他ツイートのカードを誤取得しない
         const textUrl = text.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,!?]+$/, '');
-        const card = textUrl ? root.querySelector('[data-testid="card.wrapper"]') : null;
+        // ツールバーの祖先を遡って投稿エリアのコンテナを特定（ダイアログ or 投稿エリアの直近div）
+        // ツールバーから上位に遡り、テキストエリアも含む最近の共通祖先を投稿エリアとして特定
+        const toolbar = root.querySelector('[data-testid="toolBar"]');
+        let composeArea = null;
+        if (toolbar) {
+          // 祖先を最大10階層遡り、card.wrapper が見つかる最も近い祖先を探す
+          let el = toolbar.parentElement;
+          for (let i = 0; i < 10 && el; i++) {
+            if (el.querySelector('[data-testid="card.wrapper"]')) { composeArea = el; break; }
+            el = el.parentElement;
+          }
+        }
+        const card = (textUrl && composeArea) ? composeArea.querySelector('[data-testid="card.wrapper"]') : null;
         if (card) {
           // カードのURL・タイトル・説明・サムネイルを DOM から取得
           const cardLink    = card.querySelector('a[href]');
@@ -521,32 +568,15 @@
           const cardImg     = card.querySelector('img[src]');
 
           if (pageUrl && title) {
-            let thumb;
-            if (cardImg?.src) {
-              try {
-                const imgResp = await bgFetch({ url: cardImg.src, method: 'GET', responseType: 'binary' });
-                if (imgResp.base64) {
-                  let imgBlob = await (async () => {
-                    const buf = Uint8Array.from(atob(imgResp.base64), c => c.charCodeAt(0)).buffer;
-                    return new Blob([buf], { type: imgResp.mimeType || 'image/jpeg' });
-                  })();
-                  imgBlob = await compressForBsky(imgBlob);
-                  const b64 = await blobToBase64(imgBlob);
-                  const upResp = await bgFetch({
-                    url: 'https://bsky.social/xrpc/com.atproto.repo.uploadBlob', method: 'POST',
-                    headers: { 'Authorization': `Bearer ${auth.accessJwt}`, 'Content-Type': imgBlob.type },
-                    body: b64, bodyType: 'base64',
-                  });
-                  thumb = upResp.data?.blob;
-                }
-              } catch (e) {
-                console.warn('[Crosspost] card image upload failed:', e.message);
-              }
-            }
-            embed = {
-              $type: 'app.bsky.embed.external',
-              external: { uri: pageUrl, title, description, thumb },
-            };
+            embed = await buildExternalEmbed(auth, pageUrl, title, description, cardImg?.src);
+          }
+        }
+
+        // ② Twitterカードなし → background.js 経由で直接OGP取得（Spotifyなど）
+        if (!embed && textUrl) {
+          const ogp = await fetchOgp(textUrl);
+          if (ogp) {
+            embed = await buildExternalEmbed(auth, textUrl, ogp.title, ogp.description, ogp.imageUrl);
           }
         }
       }
