@@ -83,6 +83,10 @@ All three platforms are posted in **parallel** for maximum speed.
 
 | Version | Changes |
 |---------|---------|
+| v0.22.11 | Auto-uncheck in non-dialog reply area (depth-15 DOM search for avatar/tweet) |
+| v0.22.6 | Upload images to catbox directly from content.js (bypass bgFetch port issue) |
+| v0.22 | Service Worker keep-alive port sharing for long crosspost sessions |
+| v0.21 | Service Worker keep-alive (PING every 20s to prevent SW sleep during upload) |
 | v0.20 | Auto-uncheck crosspost boxes in reply mode (placeholder + DOM detection, JP/EN) |
 | v0.19 | Grey light theme for settings popup, add homepage_url to manifest |
 | v0.18 | OGP card embed for general URLs on Bluesky (title, description, thumbnail) |
