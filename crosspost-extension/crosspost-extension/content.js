@@ -675,6 +675,14 @@
     const mCb = root?.querySelector('.cross-mast-cb');
     const tCb = root?.querySelector('.cross-threads-cb');
 
+    // ボタンクリック直前に返信モードを再チェックしてOFF（DOMが使い回される場合の対策）
+    const toolbar = root?.querySelector('[data-testid="toolBar"]');
+    if (toolbar && isReplyMode(toolbar)) {
+      if (bCb) bCb.checked = false;
+      if (mCb) mCb.checked = false;
+      if (tCb) tCb.checked = false;
+    }
+
     if (!bCb?.checked && !mCb?.checked && !tCb?.checked) {
       originalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 999 }));
       return;
@@ -810,11 +818,40 @@
   //  案C: テキストエリアのプレースホルダーで判定
   // ----------------------------------------------------------------
   const isReplyMode = (toolbarEl) => {
-    // ダイアログ内にいない場合は返信モードではない
+    // ダイアログ内かどうかで検索範囲を決定
     const dialog = toolbarEl.closest('div[role="dialog"]');
-    if (!dialog) return false;
+    const root = dialog || toolbarEl.closest('[data-testid="primaryColumn"]') || document;
 
-    const root = dialog;
+    // ダイアログ外（ツイート詳細ページの返信欄）の場合:
+    // 近くに返信先ツイートがあるか aria-placeholder で判定
+    if (!dialog) {
+      // textareaをより広い範囲で探す（祖先を最大15階層まで遡る）
+      let textarea = null;
+      let el = toolbarEl;
+      for (let i = 0; i < 15 && el; i++) {
+        textarea = el.querySelector('[data-testid="tweetTextarea_0"]');
+        if (textarea) break;
+        el = el.parentElement;
+      }
+
+      if (textarea) {
+        const placeholder = textarea.getAttribute('aria-placeholder') || '';
+        const REPLY_PH = ['返信をポスト', '返信をツイート', 'Post your reply', 'Tweet your reply', 'Reply'];
+        const POST_PH  = ['いまどうしてる？', '今どうしてる？', "What's happening?", "What's on your mind?"];
+        if (REPLY_PH.some(p => placeholder.includes(p))) return true;
+        if (POST_PH.some(p => placeholder.includes(p))) return false;
+      }
+
+      // 返信先ツイートをより広い範囲で探す（祖先を最大15階層まで遡る）
+      let ancestor = toolbarEl;
+      for (let i = 0; i < 15 && ancestor; i++) {
+        if (ancestor.querySelector('[data-testid="Tweet-User-Avatar"]')) return true;
+        if (ancestor.querySelectorAll('[data-testid="tweet"]').length > 0) return true;
+        ancestor = ancestor.parentElement;
+      }
+
+      return false;
+    }
 
     // 案C: プレースホルダーで判定（日本語・英語）
     const REPLY_PLACEHOLDERS = [
