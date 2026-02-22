@@ -16,6 +16,7 @@
 //  sendMessage ハンドラー（popup.js 用）
 // ----------------------------------------------------------------
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === 'PING') { sendResponse({ ok: true }); return true; }
   if (message.type !== 'FETCH') return false;
   handleFetch(message)
     .then(result => sendResponse(result))
@@ -30,6 +31,7 @@ chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'crosspost-fetch') return;
 
   port.onMessage.addListener(async (message) => {
+    if (message.type === 'PING') return; // keep-alive ping は無視
     if (message.type !== 'FETCH') return;
     try {
       const result = await handleFetch(message);

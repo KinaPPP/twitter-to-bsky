@@ -50,17 +50,79 @@
   // ----------------------------------------------------------------
   let _portIdCounter = 0;
 
-  const bgFetch = (params) => new Promise((resolve, reject) => {
+  // ----------------------------------------------------------------
+  //  Service Worker keep-alive（MV3対策）
+  //  crosspost処理中は持続ポートを1本開いてスリープを防ぐ
+  // ----------------------------------------------------------------
+  let _keepAlivePort = null;
+  let _keepAliveTimer = null;
+
+  // Service Worker を確実に起動させてから処理を開始する
+  async function wakeUpServiceWorker() {
+    for (let i = 0; i < 5; i++) {
+      try {
+        await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({ type: 'PING' }, (resp) => {
+            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+            else resolve(resp);
+          });
+        });
+        console.log(`[Crosspost] SW起動確認 (試行${i + 1})`);
+        return; // 成功
+      } catch (_) {
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+    console.warn('[Crosspost] SW起動確認失敗、続行します');
+  }
+
+  function startKeepAlive() {
+    if (_keepAlivePort) return;
+    const connect = () => {
+      try {
+        _keepAlivePort = chrome.runtime.connect({ name: 'crosspost-fetch' });
+        _keepAlivePort.onDisconnect.addListener(() => {
+          _keepAlivePort = null;
+          // タイマーが生きていれば再接続（処理中）
+          if (_keepAliveTimer) {
+            setTimeout(() => { if (_keepAliveTimer) connect(); }, 500);
+          }
+        });
+      } catch (_) {}
+    };
+    connect();
+    // 20秒ごとにPINGでService Workerを生存させる
+    _keepAliveTimer = setInterval(() => {
+      if (_keepAlivePort) {
+        try { _keepAlivePort.postMessage({ type: 'PING' }); } catch (_) {}
+      }
+    }, 20000);
+  }
+
+  function stopKeepAlive() {
+    if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null; }
+    if (_keepAlivePort) { try { _keepAlivePort.disconnect(); } catch (_) {} _keepAlivePort = null; }
+  }
+
+  // bgFetch: リトライ付き個別ポート方式
+  const bgFetch = (params, _retry = 0) => new Promise((resolve, reject) => {
     const id   = ++_portIdCounter;
-    const port = chrome.runtime.connect({ name: 'crosspost-fetch' });
+    let _resolved = false; // レスポンス受信済みフラグ
+    let port;
+    try {
+      port = chrome.runtime.connect({ name: 'crosspost-fetch' });
+    } catch (e) {
+      return reject(new Error('connect失敗: ' + e.message));
+    }
 
     const timer = setTimeout(() => {
       port.disconnect();
       reject(new Error('bgFetch timeout: ' + params.url));
-    }, 60000);
+    }, 90000);
 
     port.onMessage.addListener((msg) => {
       if (msg.id !== id) return;
+      _resolved = true;
       clearTimeout(timer);
       port.disconnect();
       if (msg.ok === false && msg.error) reject(new Error(msg.error));
@@ -69,12 +131,21 @@
 
     port.onDisconnect.addListener(() => {
       clearTimeout(timer);
-      const err = chrome.runtime.lastError;
-      if (err) reject(new Error(err.message));
+      void chrome.runtime.lastError; // エラーを握りつぶしてコンソール警告を抑制
+      if (_resolved) return; // レスポンス済みなら何もしない
+      // レスポンスなしで切断 → リトライ（最大3回、間隔を延ばす）
+      if (_retry < 3) {
+        const delay = (_retry + 1) * 800;
+        console.warn(`[Crosspost] bgFetch port closed (retry ${_retry + 1}/3, delay ${delay}ms):`, params.url);
+        setTimeout(() => bgFetch(params, _retry + 1).then(resolve).catch(reject), delay);
+      } else {
+        reject(new Error('Failed to fetch'));
+      }
     });
 
     port.postMessage({ type: 'FETCH', id, ...params });
   });
+
 
   // ----------------------------------------------------------------
   //  Blob → Base64
@@ -143,39 +214,30 @@
   // ----------------------------------------------------------------
   async function uploadToHost(blob) {
     if (blob.size > 50 * 1024 * 1024) blob = await resize_image(blob);
-    const b64 = await blobToBase64(blob);
 
     if (settings.uploader === 'litterbox') {
-      // litterbox.catbox.moe: 期限付きアップロード（最大1GB）
-      const resp = await bgFetch({
-        url:      'https://litterbox.catbox.moe/resources/internals/api.php',
-        method:   'POST',
-        headers:  {},
-        body: {
-          reqtype:      'fileupload',
-          time:         settings.litterbox_time || '24h',
-          fileToUpload: { __type: 'blob', data: b64, mimeType: blob.type, filename: 'image.jpg' },
-        },
-        bodyType: 'formdata',
+      // litterbox.catbox.moe: content.jsから直接fetch（CORSを許可しているため）
+      const fd = new FormData();
+      fd.append('reqtype', 'fileupload');
+      fd.append('time', settings.litterbox_time || '24h');
+      fd.append('fileToUpload', blob, 'image.jpg');
+      const resp = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
+        method: 'POST', body: fd,
       });
-      const url = (resp.text || resp.data || '').toString().trim();
+      const url = (await resp.text()).trim();
       if (!url.startsWith('https://files.catbox.moe/') && !url.startsWith('https://litter.catbox.moe/')) {
         throw new Error(`litterbox アップロード失敗: ${url || 'レスポンスなし'}`);
       }
       return url;
     } else {
-      // catbox.moe: 永久保存
-      const resp = await bgFetch({
-        url:      'https://catbox.moe/user/api.php',
-        method:   'POST',
-        headers:  {},
-        body: {
-          reqtype:      'fileupload',
-          fileToUpload: { __type: 'blob', data: b64, mimeType: blob.type, filename: 'image.jpg' },
-        },
-        bodyType: 'formdata',
+      // catbox.moe: content.jsから直接fetch（CORSを許可しているため）
+      const fd = new FormData();
+      fd.append('reqtype', 'fileupload');
+      fd.append('fileToUpload', blob, 'image.jpg');
+      const resp = await fetch('https://catbox.moe/user/api.php', {
+        method: 'POST', body: fd,
       });
-      const url = (resp.text || resp.data || '').toString().trim();
+      const url = (await resp.text()).trim();
       if (!url.startsWith('https://files.catbox.moe/')) {
         throw new Error(`catbox.moe アップロード失敗: ${url || 'レスポンスなし'}`);
       }
@@ -187,9 +249,16 @@
   //  【並列】複数画像アップロード
   // ----------------------------------------------------------------
   async function uploadAllToHost(images) {
-    return Promise.all(
-      images.map(img => fetch(img.src).then(r => r.blob()).then(uploadToHost))
-    );
+    // ポート圧迫を防ぐため1枚ずつ順番にアップロード
+    const urls = [];
+    for (let i = 0; i < images.length; i++) {
+      console.log(`[Crosspost] catbox upload[${i+1}/${images.length}] start`);
+      const blob = await fetch(images[i].src).then(r => r.blob());
+      const url  = await uploadToHost(blob);
+      console.log(`[Crosspost] catbox upload[${i+1}/${images.length}] done: ${url}`);
+      urls.push(url);
+    }
+    return urls;
   }
 
   // ----------------------------------------------------------------
@@ -606,6 +675,14 @@
     const mCb = root?.querySelector('.cross-mast-cb');
     const tCb = root?.querySelector('.cross-threads-cb');
 
+    // ボタンクリック直前に返信モードを再チェックしてOFF（DOMが使い回される場合の対策）
+    const toolbar = root?.querySelector('[data-testid="toolBar"]');
+    if (toolbar && isReplyMode(toolbar)) {
+      if (bCb) bCb.checked = false;
+      if (mCb) mCb.checked = false;
+      if (tCb) tCb.checked = false;
+    }
+
     if (!bCb?.checked && !mCb?.checked && !tCb?.checked) {
       originalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 999 }));
       return;
@@ -613,6 +690,8 @@
 
     is_processing = true;
     showToast('クロスポスト中…', 'info');
+    await wakeUpServiceWorker();
+    startKeepAlive();
 
     const text   = root.querySelector('[data-testid="tweetTextarea_0"]')?.innerText || '';
     const images = Array.from(root.querySelectorAll('[data-testid="attachments"] img'))
@@ -629,6 +708,7 @@
     ].filter(Boolean);
 
     const results = await Promise.all(jobs);
+    stopKeepAlive();
 
     const failed  = results.filter(r => !r.ok);
     const success = results.filter(r =>  r.ok);
@@ -659,6 +739,7 @@
     }
 
     is_processing = false;
+    stopKeepAlive(); // 念のため
     originalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 999 }));
   };
 
@@ -737,11 +818,40 @@
   //  案C: テキストエリアのプレースホルダーで判定
   // ----------------------------------------------------------------
   const isReplyMode = (toolbarEl) => {
-    // ダイアログ内にいない場合は返信モードではない
+    // ダイアログ内かどうかで検索範囲を決定
     const dialog = toolbarEl.closest('div[role="dialog"]');
-    if (!dialog) return false;
+    const root = dialog || toolbarEl.closest('[data-testid="primaryColumn"]') || document;
 
-    const root = dialog;
+    // ダイアログ外（ツイート詳細ページの返信欄）の場合:
+    // 近くに返信先ツイートがあるか aria-placeholder で判定
+    if (!dialog) {
+      // textareaをより広い範囲で探す（祖先を最大15階層まで遡る）
+      let textarea = null;
+      let el = toolbarEl;
+      for (let i = 0; i < 15 && el; i++) {
+        textarea = el.querySelector('[data-testid="tweetTextarea_0"]');
+        if (textarea) break;
+        el = el.parentElement;
+      }
+
+      if (textarea) {
+        const placeholder = textarea.getAttribute('aria-placeholder') || '';
+        const REPLY_PH = ['返信をポスト', '返信をツイート', 'Post your reply', 'Tweet your reply', 'Reply'];
+        const POST_PH  = ['いまどうしてる？', '今どうしてる？', "What's happening?", "What's on your mind?"];
+        if (REPLY_PH.some(p => placeholder.includes(p))) return true;
+        if (POST_PH.some(p => placeholder.includes(p))) return false;
+      }
+
+      // 返信先ツイートをより広い範囲で探す（祖先を最大15階層まで遡る）
+      let ancestor = toolbarEl;
+      for (let i = 0; i < 15 && ancestor; i++) {
+        if (ancestor.querySelector('[data-testid="Tweet-User-Avatar"]')) return true;
+        if (ancestor.querySelectorAll('[data-testid="tweet"]').length > 0) return true;
+        ancestor = ancestor.parentElement;
+      }
+
+      return false;
+    }
 
     // 案C: プレースホルダーで判定（日本語・英語）
     const REPLY_PLACEHOLDERS = [
