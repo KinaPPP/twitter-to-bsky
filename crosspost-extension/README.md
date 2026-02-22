@@ -83,7 +83,11 @@ All three platforms are posted in **parallel** for maximum speed.
 
 | Version | Changes |
 |---------|---------|
-| v0.22.11 | Auto-uncheck in non-dialog reply area (depth-15 DOM search for avatar/tweet) |
+| v0.22.15 | Fix critical crosspost bug (v0.22.11 regression): restore v0.22.6 dialog-only isReplyMode; home screen false positive was skipping crosspost entirely |
+| v0.22.11 | Auto-uncheck checkboxes in reply dialog (dialog-only) |
+
+> **既知の仕様:** バルーンアイコンから開く返信ダイアログではチェックボックスが自動OFFになります。返信をキャンセルしてホーム画面に戻った場合はOFFのままになります。再度マルチポストする場合は手動でONにしてください。
+
 | v0.22.6 | Upload images to catbox directly from content.js (bypass bgFetch port issue) |
 | v0.22 | Service Worker keep-alive port sharing for long crosspost sessions |
 | v0.21 | Service Worker keep-alive (PING every 20s to prevent SW sleep during upload) |

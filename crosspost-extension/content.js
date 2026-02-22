@@ -675,14 +675,6 @@
     const mCb = root?.querySelector('.cross-mast-cb');
     const tCb = root?.querySelector('.cross-threads-cb');
 
-    // ボタンクリック直前に返信モードを再チェックしてOFF（DOMが使い回される場合の対策）
-    const toolbar = root?.querySelector('[data-testid="toolBar"]');
-    if (toolbar && isReplyMode(toolbar)) {
-      if (bCb) bCb.checked = false;
-      if (mCb) mCb.checked = false;
-      if (tCb) tCb.checked = false;
-    }
-
     if (!bCb?.checked && !mCb?.checked && !tCb?.checked) {
       originalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 999 }));
       return;
@@ -813,63 +805,30 @@
   };
 
   // ----------------------------------------------------------------
-  //  返信モード判定
-  //  案B: 投稿エリア内に返信先ツイートが存在するか
-  //  案C: テキストエリアのプレースホルダーで判定
+  //  返信モード判定（ダイアログ内のみ対象・ホーム画面では絶対に誤検知しない）
   // ----------------------------------------------------------------
   const isReplyMode = (toolbarEl) => {
-    // ダイアログ内かどうかで検索範囲を決定
+    // ダイアログ内にいない場合は返信モードではない
     const dialog = toolbarEl.closest('div[role="dialog"]');
-    const root = dialog || toolbarEl.closest('[data-testid="primaryColumn"]') || document;
+    if (!dialog) return false;
 
-    // ダイアログ外（ツイート詳細ページの返信欄）の場合:
-    // 近くに返信先ツイートがあるか aria-placeholder で判定
-    if (!dialog) {
-      // textareaをより広い範囲で探す（祖先を最大15階層まで遡る）
-      let textarea = null;
-      let el = toolbarEl;
-      for (let i = 0; i < 15 && el; i++) {
-        textarea = el.querySelector('[data-testid="tweetTextarea_0"]');
-        if (textarea) break;
-        el = el.parentElement;
-      }
+    const root = dialog;
 
-      if (textarea) {
-        const placeholder = textarea.getAttribute('aria-placeholder') || '';
-        const REPLY_PH = ['返信をポスト', '返信をツイート', 'Post your reply', 'Tweet your reply', 'Reply'];
-        const POST_PH  = ['いまどうしてる？', '今どうしてる？', "What's happening?", "What's on your mind?"];
-        if (REPLY_PH.some(p => placeholder.includes(p))) return true;
-        if (POST_PH.some(p => placeholder.includes(p))) return false;
-      }
-
-      // 返信先ツイートをより広い範囲で探す（祖先を最大15階層まで遡る）
-      let ancestor = toolbarEl;
-      for (let i = 0; i < 15 && ancestor; i++) {
-        if (ancestor.querySelector('[data-testid="Tweet-User-Avatar"]')) return true;
-        if (ancestor.querySelectorAll('[data-testid="tweet"]').length > 0) return true;
-        ancestor = ancestor.parentElement;
-      }
-
-      return false;
-    }
-
-    // 案C: プレースホルダーで判定（日本語・英語）
+    // プレースホルダーで判定（日本語・英語）
     const REPLY_PLACEHOLDERS = [
-      '返信をポスト',          // Twitter JP (現在)
-      '返信をツイート',        // Twitter JP (旧)
-      'Tweet your reply',     // Twitter EN
-      'Post your reply',      // Twitter EN (新)
-      'Reply',                // 短縮形
+      '返信をポスト',
+      '返信をツイート',
+      'Tweet your reply',
+      'Post your reply',
+      'Reply',
       '返信する',
     ];
     const POST_PLACEHOLDERS = [
-      'いまどうしてる？',      // Twitter JP (現在)
-      '今どうしてる？',        // Twitter JP (旧)
-      "What's happening?",    // Twitter EN
+      'いまどうしてる？',
+      '今どうしてる？',
+      "What's happening?",
       "What's on your mind?",
     ];
-    // 案C: プレースホルダーによる判定（Twitter は aria-label に値が出ないため現状スキップ）
-    // 将来Twitterが属性を変更した場合に備えて残しておく
     const textarea = root.querySelector('[data-testid="tweetTextarea_0"]');
     if (textarea) {
       const placeholder = textarea.getAttribute('aria-placeholder') || '';
@@ -877,7 +836,7 @@
       if (POST_PLACEHOLDERS.some(p => placeholder.includes(p))) return false;
     }
 
-    // 案B: 投稿エリアの兄弟・親に返信先ツイートが存在するか
+    // 投稿エリアの兄弟・親に返信先ツイートが存在するか
     const tweetBlock = toolbarEl.closest('[data-testid="toolBar"]')?.closest('div');
     if (tweetBlock) {
       const hasReplyTarget = !!tweetBlock.querySelector('[data-testid="tweet"]')
@@ -920,7 +879,7 @@
         { cls: 'cross-threads-cb', checked: settings.threads_crosspost_checked,   visible: settings.threads_visible,   emoji: '🧵', label: 'Threads'  },
       ];
 
-      // 返信モードの場合はチェックを強制OFF
+      // 返信モードの場合はチェックを強制OFF（ダイアログ内のみ）
       const replyMode = isReplyMode(tb);
 
       platforms.forEach(({ cls, checked, visible, emoji, label }) => {
