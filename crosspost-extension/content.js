@@ -390,11 +390,29 @@
       return;
     }
 
-    // 【並列】catbox.moe に全画像を同時アップロード
-    const uploaderName = settings.uploader === 'litterbox' ? 'litterbox' : 'catbox.moe';
-    showToast(`${uploaderName} に画像をアップロード中… (${targetImages.length}枚)`, 'info');
-    const catboxUrls = await uploadAllToHost(targetImages);
-    console.log('[Crosspost] catbox URLs:', catboxUrls);
+    // ---- 画像URL取得: Bluesky CDN優先 → catboxフォールバック ----
+    // Bluesky設定済み → Bluesky CDNを中継に使用（外部サービス不要）
+    // Bluesky未設定  → catbox.moe / litterbox にフォールバック
+    let imageUrls;
+    if (settings.bsky_handle && settings.bsky_app_password) {
+      showToast(`Bluesky CDN に画像をアップロード中… (${targetImages.length}枚)`, 'info');
+      try {
+        imageUrls = await uploadViaBskyCdn(targetImages);
+        console.log('[Crosspost] Bluesky CDN URLs:', imageUrls);
+      } catch (e) {
+        console.warn('[Crosspost] Bluesky CDN 失敗、catboxにフォールバック:', e.message);
+        const uploaderName = settings.uploader === 'litterbox' ? 'litterbox' : 'catbox.moe';
+        showToast(`${uploaderName} に画像をアップロード中… (${targetImages.length}枚)`, 'info');
+        imageUrls = await uploadAllToHost(targetImages);
+        console.log('[Crosspost] catbox URLs (fallback):', imageUrls);
+      }
+    } else {
+      const uploaderName = settings.uploader === 'litterbox' ? 'litterbox' : 'catbox.moe';
+      showToast(`${uploaderName} に画像をアップロード中… (${targetImages.length}枚)`, 'info');
+      imageUrls = await uploadAllToHost(targetImages);
+      console.log('[Crosspost] catbox URLs:', imageUrls);
+    }
+    const catboxUrls = imageUrls;
 
     // ---- 画像 1 枚: IMAGE 投稿 ----
     if (catboxUrls.length === 1) {
@@ -550,6 +568,55 @@
       console.warn('[Crosspost] OGP fetch failed:', e.message);
       return null;
     }
+  }
+
+  // ----------------------------------------------------------------
+  //  Bluesky CDN を Threads 画像中継に使用
+  //  uploadBlob → blob.ref.$link (CID) + auth.did → CDN URL → Threads に渡す
+  //  CDN URL形式: https://cdn.bsky.app/img/feed_fullsize/plain/{did}/{cid}@jpeg
+  //  Bluesky設定済みの場合は catbox.moe 不要（外部サービス依存なし）
+  // ----------------------------------------------------------------
+  async function uploadViaBskyCdn(images) {
+    const { bsky_handle, bsky_app_password } = settings;
+
+    // Bluesky 認証
+    const authResp = await bgFetch({
+      url: 'https://bsky.social/xrpc/com.atproto.server.createSession', method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: bsky_handle, password: bsky_app_password }),
+      bodyType: 'json',
+    });
+    const auth = authResp.data;
+    if (!auth?.accessJwt) throw new Error('Bluesky 認証失敗');
+    console.log('[Crosspost] Bluesky 認証OK, did:', auth.did);
+
+    // 全画像を並列アップロード
+    const blobList = await Promise.all(
+      images.map(img => fetch(img.src).then(r => r.blob()))
+    );
+
+    const cdnUrls = await Promise.all(
+      blobList.map(async (blob, i) => {
+        blob = await compressForBsky(blob);
+        const b64 = await blobToBase64(blob);
+        const upResp = await bgFetch({
+          url: 'https://bsky.social/xrpc/com.atproto.repo.uploadBlob', method: 'POST',
+          headers: { 'Authorization': `Bearer ${auth.accessJwt}`, 'Content-Type': blob.type },
+          body: b64, bodyType: 'base64',
+        });
+        const cid = upResp.data?.blob?.ref?.$link;
+        if (!cid) throw new Error(`画像[${i+1}] CID取得失敗: ${JSON.stringify(upResp.data)}`);
+
+        // CDN URL を2パターン試す → まず cdn.bsky.app
+        const cdnUrl = `https://cdn.bsky.app/img/feed_fullsize/plain/${auth.did}/${cid}@jpeg`;
+        console.log(`[Crosspost] 画像[${i+1}] CID: ${cid}`);
+        console.log(`[Crosspost] 画像[${i+1}] CDN URL: ${cdnUrl}`);
+        return { cdnUrl, fallbackUrl: `https://bsky.social/xrpc/com.atproto.sync.getBlob?did=${auth.did}&cid=${cid}`, cid, did: auth.did };
+      })
+    );
+
+    console.log('[Crosspost] 全CDN URL生成完了:', cdnUrls.map(u => u.cdnUrl));
+    return cdnUrls.map(u => u.cdnUrl);
   }
 
   // ----------------------------------------------------------------
@@ -1000,6 +1067,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.23.3 loaded ✓');
+  console.log('[Crosspost] v0.24.0 loaded ✓');
 
 })();

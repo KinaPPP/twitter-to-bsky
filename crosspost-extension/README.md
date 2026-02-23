@@ -51,8 +51,19 @@ A Chrome Extension (Manifest V3) to crosspost from Twitter/X to **Bluesky**, **M
 5. Enter both values in the extension settings
 6. Use the **「更新」(Refresh)** button before the token expires
 
-### 📦 catbox.moe (for Threads image posts)
-No setup required. Images are temporarily uploaded to [catbox.moe](https://catbox.moe) to obtain a public URL, then posted to Threads. Once Threads fetches the image, it's stored on Meta's CDN — catbox.moe is only needed at the moment of posting.
+### 📦 Image uploader (for Threads image posts)
+No setup required. Threads API requires a public image URL — this extension handles that automatically using one of the following methods:
+
+| Condition | Method |
+|-----------|--------|
+| Bluesky is configured | **Bluesky CDN** is used as relay — no external service needed |
+| Bluesky is not configured | **catbox.moe** or **litterbox** is used as relay |
+
+**Why Bluesky CDN?** When you upload an image to Bluesky, it gets a permanent public URL on `cdn.bsky.app`. This extension reuses that URL to pass to the Threads API, eliminating dependency on third-party uploaders entirely.
+
+> **Note:** If you only use Mastodon or Threads (without Bluesky), catbox.moe / litterbox is still required. This is because the Bluesky CDN relay only works when Bluesky credentials are configured.
+
+Once Threads fetches the image, it's stored on Meta's CDN — the relay URL is only needed at the moment of posting.
 
 ---
 
@@ -62,8 +73,10 @@ No setup required. Images are temporarily uploaded to [catbox.moe](https://catbo
 Twitter/X post
     ↓ Click tweet button (crosspost checkboxes checked)
     ├── Bluesky  — direct blob upload via API
-    ├── Mastodon — direct blob upload via API  
-    └── Threads  — blob → catbox.moe (public URL) → Threads API
+    ├── Mastodon — direct blob upload via API
+    └── Threads  — image relay → Threads API
+                   ├── Bluesky configured: blob → Bluesky CDN (cdn.bsky.app) → Threads API
+                   └── Bluesky not configured: blob → catbox.moe → Threads API
 ```
 
 All three platforms are posted in **parallel** for maximum speed.
@@ -85,6 +98,7 @@ All three platforms are posted in **parallel** for maximum speed.
 |---------|---------|
 | Version | Changes |
 |---------|---------|\
+| v0.24.0 | Use Bluesky CDN (cdn.bsky.app) as Threads image relay when Bluesky is configured — eliminates catbox.moe dependency for Bluesky users; catbox remains as fallback when Bluesky is not configured |
 | v0.23.3 | Fix 4-image carousel timeout: extend bgFetch timeout 90s→180s; add extra polling intervals for CAROUSEL container (max 59s vs 29s for others) |
 | v0.23.2 | Fix hang: wrap execCrosspost in try/finally to guarantee is_processing reset on any error (e.g. bgFetch port closed during carousel polling) |
 | v0.23.1 | Fix image upload CORS error: catbox.moe / litterbox changed CORS policy; route uploads through background.js instead of direct fetch |

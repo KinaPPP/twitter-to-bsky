@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Crosspost to Bluesky / Mastodon / Threads",
-  "version": "0.23.3",
-  "description": "Twitter/X への投稿を Bluesky・Mastodon・Threads に同時クロスポスト (v0.23.3)",
+  "version": "0.24.0",
+  "description": "Twitter/X への投稿を Bluesky・Mastodon・Threads に同時クロスポスト (v0.24.0)",
   "permissions": [
     "storage",
     "tabs"
