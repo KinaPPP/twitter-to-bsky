@@ -85,6 +85,9 @@ All three platforms are posted in **parallel** for maximum speed.
 |---------|---------|
 | Version | Changes |
 |---------|---------|\
+| v0.23.3 | Fix 4-image carousel timeout: extend bgFetch timeout 90s→180s; add extra polling intervals for CAROUSEL container (max 59s vs 29s for others) |
+| v0.23.2 | Fix hang: wrap execCrosspost in try/finally to guarantee is_processing reset on any error (e.g. bgFetch port closed during carousel polling) |
+| v0.23.1 | Fix image upload CORS error: catbox.moe / litterbox changed CORS policy; route uploads through background.js instead of direct fetch |
 | v0.23.0 | Keyboard shortcuts Alt+0〜3 for checkbox toggle (Alt+0=all, Alt+1=Bsky, Alt+2=Threads, Alt+3=Mastodon); option to disable Alt shortcuts for conflicting environments; settings panel reordered (Bluesky→Threads→Mastodon); popup width expanded to 500px |
 | v0.22.15 | Fix critical crosspost bug (v0.22.11 regression): restore v0.22.6 dialog-only isReplyMode; home screen false positive was skipping crosspost entirely |
 | v0.22.11 | Auto-uncheck checkboxes in reply dialog (dialog-only) |

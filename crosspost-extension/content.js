@@ -119,7 +119,7 @@
     const timer = setTimeout(() => {
       port.disconnect();
       reject(new Error('bgFetch timeout: ' + params.url));
-    }, 90000);
+    }, 180000);
 
     port.onMessage.addListener((msg) => {
       if (msg.id !== id) return;
@@ -215,30 +215,36 @@
   // ----------------------------------------------------------------
   async function uploadToHost(blob) {
     if (blob.size > 50 * 1024 * 1024) blob = await resize_image(blob);
+    // catbox.moe / litterbox ともに CORS 非許可のため bgFetch（background.js）経由でアップロード
+    const b64 = await blobToBase64(blob);
 
     if (settings.uploader === 'litterbox') {
-      // litterbox.catbox.moe: content.jsから直接fetch（CORSを許可しているため）
-      const fd = new FormData();
-      fd.append('reqtype', 'fileupload');
-      fd.append('time', settings.litterbox_time || '24h');
-      fd.append('fileToUpload', blob, 'image.jpg');
-      const resp = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
-        method: 'POST', body: fd,
+      const resp = await bgFetch({
+        url:      'https://litterbox.catbox.moe/resources/internals/api.php',
+        method:   'POST',
+        body: {
+          reqtype:      'fileupload',
+          time:         settings.litterbox_time || '24h',
+          fileToUpload: { __type: 'blob', data: b64, mimeType: blob.type, filename: 'image.jpg' },
+        },
+        bodyType: 'formdata',
       });
-      const url = (await resp.text()).trim();
+      const url = (resp.text || resp.data || '').toString().trim();
       if (!url.startsWith('https://files.catbox.moe/') && !url.startsWith('https://litter.catbox.moe/')) {
         throw new Error(`litterbox アップロード失敗: ${url || 'レスポンスなし'}`);
       }
       return url;
     } else {
-      // catbox.moe: content.jsから直接fetch（CORSを許可しているため）
-      const fd = new FormData();
-      fd.append('reqtype', 'fileupload');
-      fd.append('fileToUpload', blob, 'image.jpg');
-      const resp = await fetch('https://catbox.moe/user/api.php', {
-        method: 'POST', body: fd,
+      const resp = await bgFetch({
+        url:      'https://catbox.moe/user/api.php',
+        method:   'POST',
+        body: {
+          reqtype:      'fileupload',
+          fileToUpload: { __type: 'blob', data: b64, mimeType: blob.type, filename: 'image.jpg' },
+        },
+        bodyType: 'formdata',
       });
-      const url = (await resp.text()).trim();
+      const url = (resp.text || resp.data || '').toString().trim();
       if (!url.startsWith('https://files.catbox.moe/')) {
         throw new Error(`catbox.moe アップロード失敗: ${url || 'レスポンスなし'}`);
       }
@@ -319,8 +325,14 @@
   // ----------------------------------------------------------------
   async function waitForThreadsContainer(containerId, token, label = '') {
     const BASE = 'https://graph.threads.net/v1.0';
-    // 最初は1秒待機、以降2秒間隔（合計最大 1 + 2×14 = 29秒）
-    const intervals = [1000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000];
+    // 最初は1秒待機、以降2秒間隔
+    // CAROUSEL は処理が重いため間隔を多めに用意（最大 1 + 2×29 = 59秒）
+    const isCarousel = label === 'CAROUSEL';
+    const intervals = isCarousel
+      ? [1000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000,
+         2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000,
+         2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000]
+      : [1000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000];
 
     for (let i = 0; i < intervals.length; i++) {
       await new Promise(r => setTimeout(r, intervals[i]));
@@ -700,40 +712,44 @@
                                                     .catch(e  => ({ platform: 'Bluesky', ok: false, error: e.message })) : null,
     ].filter(Boolean);
 
-    const results = await Promise.all(jobs);
-    stopKeepAlive();
+    try {
+      const results = await Promise.all(jobs);
 
-    const failed  = results.filter(r => !r.ok);
-    const success = results.filter(r =>  r.ok);
+      const failed  = results.filter(r => !r.ok);
+      const success = results.filter(r =>  r.ok);
 
-    if (failed.length === 0) {
-      showToast(`${success.map(r => r.platform).join(' / ')} に投稿完了 ✓`, 'success');
-    } else {
-      failed.forEach(r => {
-        console.error(`[Crosspost] ${r.platform} 失敗:`, r.error);
-        showToast(`${r.platform} 失敗: ${r.error}`, 'error');
-      });
+      if (failed.length === 0) {
+        showToast(`${success.map(r => r.platform).join(' / ')} に投稿完了 ✓`, 'success');
+      } else {
+        failed.forEach(r => {
+          console.error(`[Crosspost] ${r.platform} 失敗:`, r.error);
+          showToast(`${r.platform} 失敗: ${r.error}`, 'error');
+        });
+      }
+
+      // チェックボックスのリセット
+      const succeededPlatforms = new Set(success.map(r => r.platform));
+      if (failed.length === 0) {
+        if (bCb) bCb.checked = settings.bsky_crosspost_checked;
+        if (mCb) mCb.checked = settings.mastodon_crosspost_checked;
+        if (tCb) tCb.checked = settings.threads_crosspost_checked;
+      } else {
+        if (bCb && succeededPlatforms.has('Bluesky'))  bCb.checked = false;
+        if (mCb && succeededPlatforms.has('Mastodon')) mCb.checked = false;
+        if (tCb && succeededPlatforms.has('Threads'))  tCb.checked = false;
+      }
+
+      originalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 999 }));
+
+    } catch (e) {
+      // 予期せぬエラー（bgFetchポート切れ等）— Twitterをハングさせないためにここでも捕捉
+      console.error('[Crosspost] 予期せぬエラー:', e);
+      showToast('予期せぬエラー: ' + e.message, 'error');
+    } finally {
+      // どんな状況でも必ずリセット — これがないとTwitterごとハングする
+      is_processing = false;
+      stopKeepAlive();
     }
-
-    // チェックボックスのリセット
-    // 全部成功         → デフォルト設定値に戻す（次の新規ツイートはデフォルト通りに）
-    // 一部失敗（リトライ想定）→ 成功したものはOFF、失敗したものはチェック維持
-    const succeededPlatforms = new Set(success.map(r => r.platform));
-    if (failed.length === 0) {
-      // 全成功: デフォルト値に戻す
-      if (bCb) bCb.checked = settings.bsky_crosspost_checked;
-      if (mCb) mCb.checked = settings.mastodon_crosspost_checked;
-      if (tCb) tCb.checked = settings.threads_crosspost_checked;
-    } else {
-      // 一部失敗: 成功したものだけOFF、失敗したものはそのまま
-      if (bCb && succeededPlatforms.has('Bluesky'))  bCb.checked = false;
-      if (mCb && succeededPlatforms.has('Mastodon')) mCb.checked = false;
-      if (tCb && succeededPlatforms.has('Threads'))  tCb.checked = false;
-    }
-
-    is_processing = false;
-    stopKeepAlive(); // 念のため
-    originalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 999 }));
   };
 
   // ----------------------------------------------------------------
@@ -984,6 +1000,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.23.0 loaded ✓');
+  console.log('[Crosspost] v0.23.3 loaded ✓');
 
 })();
