@@ -98,6 +98,7 @@ All three platforms are posted in **parallel** for maximum speed.
 |---------|---------|
 | Version | Changes |
 |---------|---------|\
+| v0.24.1 | Processing toast stays visible throughout crosspost (spinner + step-by-step messages); auto-replaced by success/error on completion |
 | v0.24.0 | Use Bluesky CDN (cdn.bsky.app) as Threads image relay when Bluesky is configured — eliminates catbox.moe dependency for Bluesky users; catbox remains as fallback when Bluesky is not configured |
 | v0.23.3 | Fix 4-image carousel timeout: extend bgFetch timeout 90s→180s; add extra polling intervals for CAROUSEL container (max 59s vs 29s for others) |
 | v0.23.2 | Fix hang: wrap execCrosspost in try/finally to guarantee is_processing reset on any error (e.g. bgFetch port closed during carousel polling) |

@@ -334,6 +334,13 @@
          2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000]
       : [1000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000];
 
+    // トースト表示用のラベル変換
+    const toastLabel = isCarousel ? 'Threads カルーセル公開待ち…'
+                     : label.startsWith('IMAGE[') ? `Threads 画像処理中 (${label.match(/\d+\/\d+/)?.[0]})…`
+                     : label === 'IMAGE' ? 'Threads 画像処理中…'
+                     : 'Threads テキスト処理中…';
+    updateToast(toastLabel);
+
     for (let i = 0; i < intervals.length; i++) {
       await new Promise(r => setTimeout(r, intervals[i]));
       const statusResp = await bgFetch({
@@ -395,20 +402,20 @@
     // Bluesky未設定  → catbox.moe / litterbox にフォールバック
     let imageUrls;
     if (settings.bsky_handle && settings.bsky_app_password) {
-      showToast(`Bluesky CDN に画像をアップロード中… (${targetImages.length}枚)`, 'info');
+      updateToast(`Bluesky CDN に画像をアップロード中… (${targetImages.length}枚)`);
       try {
         imageUrls = await uploadViaBskyCdn(targetImages);
         console.log('[Crosspost] Bluesky CDN URLs:', imageUrls);
       } catch (e) {
         console.warn('[Crosspost] Bluesky CDN 失敗、catboxにフォールバック:', e.message);
         const uploaderName = settings.uploader === 'litterbox' ? 'litterbox' : 'catbox.moe';
-        showToast(`${uploaderName} に画像をアップロード中… (${targetImages.length}枚)`, 'info');
+        updateToast(`${uploaderName} に画像をアップロード中… (${targetImages.length}枚)`);
         imageUrls = await uploadAllToHost(targetImages);
         console.log('[Crosspost] catbox URLs (fallback):', imageUrls);
       }
     } else {
       const uploaderName = settings.uploader === 'litterbox' ? 'litterbox' : 'catbox.moe';
-      showToast(`${uploaderName} に画像をアップロード中… (${targetImages.length}枚)`, 'info');
+      updateToast(`${uploaderName} に画像をアップロード中… (${targetImages.length}枚)`);
       imageUrls = await uploadAllToHost(targetImages);
       console.log('[Crosspost] catbox URLs:', imageUrls);
     }
@@ -431,7 +438,7 @@
 
     // ---- 画像 2〜4 枚: CAROUSEL 投稿 ----
     // 子コンテナは順番に作成（Threads API は並列リクエストに非対応）
-    showToast('カルーセルコンテナ作成中…', 'info');
+    updateToast('Threads カルーセル処理中…');
     const childIds = [];
     for (let i = 0; i < catboxUrls.length; i++) {
       const resp = await bgFetch({
@@ -761,7 +768,7 @@
     }
 
     is_processing = true;
-    showToast('クロスポスト中…', 'info');
+    showToast('クロスポスト中…', 'processing');
     await wakeUpServiceWorker();
     startKeepAlive();
 
@@ -822,11 +829,16 @@
   // ----------------------------------------------------------------
   //  トースト通知（error はクリックで閉じる）
   // ----------------------------------------------------------------
+  // type:
+  //   'processing' — スピナー付き、消えない（処理中）
+  //   'info'       — 4秒で消える（補足情報）
+  //   'success'    — 4秒で消える（完了）
+  //   'error'      — クリックで消える（エラー）
   const showToast = (msg, type = 'info') => {
     const existing = document.getElementById('cross-toast');
     if (existing) existing.remove();
 
-    const colors = { info: '#1d9bf0', success: '#00ba7c', error: '#f4212e' };
+    const colors = { processing: '#1d9bf0', info: '#1d9bf0', success: '#00ba7c', error: '#f4212e' };
     const toast  = document.createElement('div');
     toast.id = 'cross-toast';
     toast.style.cssText = `
@@ -838,6 +850,27 @@
       max-width:88vw; display:flex; align-items:center; gap:10px;
       cursor:${type === 'error' ? 'pointer' : 'default'};
     `;
+
+    // スピナー（processing タイプのみ）
+    if (type === 'processing') {
+      const spinner = document.createElement('span');
+      spinner.style.cssText = [
+        'width:14px', 'height:14px', 'border-radius:50%',
+        'border:2px solid rgba(255,255,255,0.35)',
+        'border-top-color:white',
+        'animation:cross-spin 0.7s linear infinite',
+        'flex-shrink:0', 'display:inline-block',
+      ].join(';');
+      toast.appendChild(spinner);
+      // アニメーション定義（初回のみ）
+      if (!document.getElementById('cross-toast-style')) {
+        const style = document.createElement('style');
+        style.id = 'cross-toast-style';
+        style.textContent = '@keyframes cross-spin { to { transform:rotate(360deg); } }';
+        document.head.appendChild(style);
+      }
+    }
+
     const msgSpan = document.createElement('span');
     msgSpan.textContent = msg;
     msgSpan.style.cssText = 'flex:1; word-break:break-word; white-space:pre-wrap;';
@@ -855,9 +888,16 @@
     }
 
     document.body.appendChild(toast);
-    if (type !== 'error') {
+    // processing は消えない。error はクリックで消える。それ以外は4秒
+    if (type !== 'error' && type !== 'processing') {
       setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
     }
+  };
+
+  // processing トーストのメッセージだけを更新（スピナーは維持）
+  const updateToast = (msg) => {
+    const span = document.querySelector('#cross-toast span:last-child');
+    if (span) span.textContent = msg;
   };
 
   // ----------------------------------------------------------------
@@ -1067,6 +1107,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.24.0 loaded ✓');
+  console.log('[Crosspost] v0.24.1 loaded ✓');
 
 })();
