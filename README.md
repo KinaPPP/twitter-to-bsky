@@ -1,4 +1,4 @@
-## Chrome Extension (by KinaPPP) — v0.24.0
+## Chrome Extension (by KinaPPP) — v0.24.1
 
 A Chrome Extension (Manifest V3) fork of this userscript.  
 Added: Threads support, image upload via catbox.moe, carousel posts, token expiry management, parallel posting.
