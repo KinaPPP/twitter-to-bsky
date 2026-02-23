@@ -40,6 +40,7 @@
       threads_visible:            true,
       uploader:                   'catbox',
       litterbox_time:             '24h',
+      alt_shortcuts_enabled:      true,
     }, (items) => { settings = items; resolve(items); });
   });
 
@@ -794,6 +795,48 @@
       return;
     }
 
+    // Alt+0〜3: チェックボックス切り替え（設定で無効化可能）
+    if (e.type === 'keydown' && e.altKey && !e.ctrlKey && ['0','1','2','3'].includes(e.key)) {
+      if (!settings.alt_shortcuts_enabled) return;
+
+      // 投稿エリアの root を特定
+      const bt   = document.querySelector('[data-testid*="tweetButton"]');
+      const root = bt
+        ? (bt.closest('div[role="dialog"]') || document.querySelector('div[data-testid="primaryColumn"]'))
+        : document.querySelector('div[data-testid="primaryColumn"]');
+      if (!root) return;
+
+      const bCb = root.querySelector('.cross-bsky-cb');
+      const tCb = root.querySelector('.cross-threads-cb');
+      const mCb = root.querySelector('.cross-mast-cb');
+
+      // 表示されているチェックボックスのみ対象
+      const visible = [bCb, tCb, mCb].filter(Boolean);
+      if (visible.length === 0) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      if (e.key === '0') {
+        // Alt+0: 全体 — 1つでもONなら全OFF、全OFFなら全ON
+        const anyOn = visible.some(cb => cb.checked);
+        visible.forEach(cb => {
+          cb.checked = !anyOn;
+          cb.dispatchEvent(new Event('change'));
+        });
+      } else {
+        // Alt+1/2/3: 個別トグル（番号は表示順: Bsky=1, Threads=2, Mast=3）
+        const targets = [bCb, tCb, mCb];
+        const idx = parseInt(e.key) - 1;
+        const cb  = targets[idx];
+        if (cb) {
+          cb.checked = !cb.checked;
+          cb.dispatchEvent(new Event('change'));
+        }
+      }
+      return;
+    }
+
     if (e.type === 'click') {
       const bt   = e.currentTarget;
       const root = bt.closest('div[role="dialog"]') || bt.closest('div[data-testid="primaryColumn"]');
@@ -932,6 +975,7 @@
 
       // toolBar div の直後に挿入
       tb.parentNode.insertBefore(bar, tb.nextSibling);
+      console.log('[Crosspost] checkboxes injected ✓');
     });
   };
 
@@ -939,5 +983,7 @@
   const observer = new MutationObserver(setup);
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
+
+  console.log('[Crosspost] v0.23.0 loaded ✓');
 
 })();

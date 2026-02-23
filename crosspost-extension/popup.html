@@ -19,17 +19,14 @@
       --danger:  #d93025;
       --radius:  8px;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
-      width: 420px;
+      width: 500px;
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       font-size: 14px;
     }
-
     header {
       padding: 16px 20px 12px;
       border-bottom: 1px solid var(--border);
@@ -40,32 +37,34 @@
       font-size: 11px; padding: 2px 8px; border-radius: 20px;
       background: #ddd; color: var(--muted);
     }
-
     .sections { padding: 12px 20px 16px; display: flex; flex-direction: column; gap: 16px; }
-
     .section {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       overflow: hidden;
     }
-
     .section-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 14px; border-bottom: 1px solid var(--border);
       font-weight: 600; font-size: 13px;
-      letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted);
+      letter-spacing: 0.3px; color: var(--muted);
     }
     .section-header .platform-icon { display: flex; align-items: center; gap: 6px; color: var(--text); }
-
+    .shortcut-badge { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; }
+    kbd {
+      background: #e0e0e0; border: 1px solid #bbb;
+      border-bottom: 2px solid #999;
+      border-radius: 4px; padding: 1px 6px;
+      font-size: 11px; color: #444; font-family: monospace;
+      white-space: nowrap;
+    }
     .toggle-default {
       display: flex; align-items: center; gap: 6px;
       font-size: 12px; color: var(--muted); cursor: pointer;
     }
     .toggle-default input[type="checkbox"] { width: 14px; height: 14px; cursor: pointer; accent-color: var(--bsky); }
-
     .section-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
-
     input[type="text"], input[type="password"] {
       width: 100%; background: #fff; color: var(--text);
       border: 1px solid var(--border); border-radius: 6px;
@@ -74,14 +73,10 @@
     }
     input[type="text"]:focus, input[type="password"]:focus { border-color: #4a8ce0; }
     input::placeholder { color: var(--muted); }
-
     .hint { font-size: 11px; color: var(--muted); line-height: 1.5; padding: 4px 0 0; }
     .hint a { color: #3a7bd5; text-decoration: none; }
     .hint code { font-size: 10px; background: #ddd; padding: 1px 4px; border-radius: 3px; word-break: break-all; }
-
-
     .header-controls { display: flex; align-items: center; gap: 10px; }
-
     .toggle-show {
       display: flex; align-items: center; gap: 5px;
       font-size: 12px; color: var(--muted); cursor: pointer;
@@ -91,8 +86,6 @@
     }
     .toggle-show input[type="checkbox"] { width: 13px; height: 13px; cursor: pointer; accent-color: var(--success); }
     .toggle-show:has(input:checked) { background: rgba(63,185,80,0.1); border-color: rgba(63,185,80,0.4); color: var(--success); }
-
-
     .uploader-radio {
       flex: 1; display: flex; align-items: center; gap: 8px;
       padding: 8px 12px; border-radius: 8px;
@@ -107,13 +100,10 @@
       color: var(--catbox);
     }
     .uploader-radio small { font-size: 10px; opacity: 0.7; display: block; }
-
     .section[data-platform="bsky"]     .section-header { border-left: 3px solid var(--bsky); }
+    .section[data-platform="threads"]  .section-header { border-left: 3px solid #555; }
     .section[data-platform="mastodon"] .section-header { border-left: 3px solid var(--mast); }
-    .section[data-platform="threads"]  .section-header { border-left: 3px solid #aaa; }
     .section[data-platform="catbox"]   .section-header { border-left: 3px solid var(--catbox); }
-
-    /* catbox.moe テストボタン */
     .catbox-test-row { display: flex; gap: 6px; align-items: center; }
     .test-btn {
       flex-shrink: 0; padding: 6px 12px;
@@ -124,12 +114,9 @@
     }
     .test-btn:hover:not(:disabled) { background: #d4d4d4; }
     .test-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .test-btn.loading { animation: none; }
     .test-result { font-size: 11px; min-height: 14px; }
     .test-result.success { color: var(--success); }
     .test-result.error   { color: var(--danger); }
-
-    /* catbox.moe ステータスバッジ */
     .catbox-badge {
       display: inline-flex; align-items: center; gap: 5px;
       padding: 3px 8px; border-radius: 12px;
@@ -137,21 +124,9 @@
       border: 1px solid rgba(245, 166, 35, 0.3);
       font-size: 11px; color: var(--catbox);
     }
-    .catbox-badge .dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--catbox);
-      box-shadow: 0 0 4px var(--catbox);
-    }
-
-    /* Threads トークン管理パネル */
-    .token-manager {
-      background: #efefef; border: 1px solid var(--border);
-      border-radius: 6px; overflow: hidden;
-    }
-    .token-status-bar {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 8px 10px; gap: 8px;
-    }
+    .catbox-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--catbox); box-shadow: 0 0 4px var(--catbox); }
+    .token-manager { background: #efefef; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .token-status-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; gap: 8px; }
     .expiry-info { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; }
     .expiry-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #444; }
     .expiry-dot.ok      { background: var(--success); box-shadow: 0 0 5px var(--success); }
@@ -159,17 +134,14 @@
     .expiry-dot.danger  { background: var(--danger);  box-shadow: 0 0 5px var(--danger); animation: pulse 1.2s infinite; }
     .expiry-dot.expired { background: var(--danger); }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
     .expiry-text { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .expiry-text.ok     { color: var(--success); }
     .expiry-text.warn   { color: var(--warning); }
     .expiry-text.danger { color: var(--danger); }
     .expiry-text.expired{ color: var(--danger); }
-
     .token-progress-wrap { padding: 0 10px 6px; }
     .token-progress-bar  { height: 3px; border-radius: 2px; background: #ccc; overflow: hidden; }
     .token-progress-fill { height: 100%; border-radius: 2px; transition: width 0.5s, background 0.5s; }
-
     .refresh-btn {
       flex-shrink: 0; padding: 5px 11px; background: #e0e0e0; color: var(--text);
       border: 1px solid var(--border); border-radius: 5px;
@@ -181,11 +153,9 @@
     .refresh-btn .spin-icon { display: inline-block; font-style: normal; }
     .refresh-btn.loading .spin-icon { animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
     .refresh-result { font-size: 11px; padding: 0 10px 7px; color: var(--muted); min-height: 15px; }
     .refresh-result.success { color: var(--success); }
     .refresh-result.error   { color: var(--danger); }
-
     footer { padding: 0 20px 16px; }
     .save-btn {
       width: 100%; padding: 10px;
@@ -197,29 +167,57 @@
     .save-btn:hover  { opacity: 0.9; }
     .save-btn:active { transform: scale(0.98); }
     .status-msg { text-align: center; margin-top: 8px; font-size: 13px; color: var(--success); min-height: 16px; }
-
     .help-links {
       display: flex; gap: 12px; justify-content: center;
       padding: 12px 20px 0; font-size: 12px; flex-wrap: wrap;
     }
     .help-links a { color: var(--muted); text-decoration: none; }
     .help-links a:hover { color: var(--text); }
-
+    /* ショートカットパネル */
     .shortcut-tip {
-      margin: 0 20px 12px; padding: 8px 12px;
+      margin: 0 20px 12px; padding: 10px 14px;
       background: #f0f0f0; border: 1px solid var(--border);
-      border-radius: var(--radius); font-size: 12px; color: var(--muted); text-align: center;
+      border-radius: var(--radius); font-size: 12px; color: var(--muted);
     }
-    kbd {
-      background: #ddd; border: 1px solid #bbb;
-      border-radius: 4px; padding: 1px 6px; font-size: 12px; color: var(--text);
+    .tip-title-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
     }
+    .tip-title { font-weight: 600; color: var(--text); font-size: 12px; }
+    /* Alt+0〜3 トグルスイッチ */
+    .alt-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+    .alt-toggle input[type="checkbox"] { display: none; }
+    .alt-toggle-track {
+      width: 30px; height: 16px; border-radius: 8px;
+      background: #bbb; position: relative;
+      transition: background 0.2s; flex-shrink: 0;
+    }
+    .alt-toggle input:checked ~ .alt-toggle-track { background: var(--bsky); }
+    .alt-toggle-thumb {
+      position: absolute; top: 2px; left: 2px;
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #fff; transition: left 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .alt-toggle input:checked ~ .alt-toggle-track .alt-toggle-thumb { left: 16px; }
+    .alt-toggle-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    /* Alt ブロック（OFF時に薄くなる） */
+    .shortcut-block { transition: opacity 0.2s; }
+    .shortcut-block.disabled { opacity: 0.35; pointer-events: none; }
+    .shortcut-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 3px 0; border-bottom: 1px solid #e0e0e0;
+    }
+    .shortcut-row:last-child { border-bottom: none; }
+    .shortcut-keys { display: flex; align-items: center; gap: 3px; min-width: 210px; flex-shrink: 0; }
+    .shortcut-desc { color: var(--muted); }
+    .shortcut-divider { border-top: 1px solid #e0e0e0; margin: 6px 0; }
   </style>
 </head>
 <body>
   <header>
     <h1>⚡ Crosspost</h1>
-    <span class="badge">v0.22.15</span>
+    <span class="badge">v0.23.0</span>
   </header>
 
   <div class="help-links">
@@ -233,8 +231,14 @@
     <!-- Bluesky -->
     <div class="section" data-platform="bsky">
       <div class="section-header">
-        <span class="platform-icon">🦋 Bluesky</span>
-        <div class="header-controls"><label class="toggle-show"><input type="checkbox" id="bv" checked> 表示</label><label class="toggle-default"><input type="checkbox" id="bd"> デフォルトON</label></div>
+        <span class="platform-icon">
+          🦋 Bluesky
+          <span class="shortcut-badge"><kbd>Alt</kbd>+<kbd>1</kbd></span>
+        </span>
+        <div class="header-controls">
+          <label class="toggle-show"><input type="checkbox" id="bv" checked> 表示</label>
+          <label class="toggle-default"><input type="checkbox" id="bd"> デフォルトON</label>
+        </div>
       </div>
       <div class="section-body">
         <input type="text"     id="bh" placeholder="Handle  (例: you.bsky.social)">
@@ -243,24 +247,17 @@
       </div>
     </div>
 
-    <!-- Mastodon -->
-    <div class="section" data-platform="mastodon">
-      <div class="section-header">
-        <span class="platform-icon">🐘 Mastodon</span>
-        <div class="header-controls"><label class="toggle-show"><input type="checkbox" id="mv" checked> 表示</label><label class="toggle-default"><input type="checkbox" id="md"> デフォルトON</label></div>
-      </div>
-      <div class="section-body">
-        <input type="text"     id="mu" placeholder="Instance URL  (例: https://mastodon.social)">
-        <input type="password" id="mk" placeholder="Access Token">
-        <p class="hint">Settings → Development → New Application でトークンを発行してください。</p>
-      </div>
-    </div>
-
-    <!-- Threads -->
+    <!-- Threads（2番目） -->
     <div class="section" data-platform="threads">
       <div class="section-header">
-        <span class="platform-icon">🧵 Threads</span>
-        <div class="header-controls"><label class="toggle-show"><input type="checkbox" id="tv" checked> 表示</label><label class="toggle-default"><input type="checkbox" id="tdf"> デフォルトON</label></div>
+        <span class="platform-icon">
+          🧵 Threads
+          <span class="shortcut-badge"><kbd>Alt</kbd>+<kbd>2</kbd></span>
+        </span>
+        <div class="header-controls">
+          <label class="toggle-show"><input type="checkbox" id="tv" checked> 表示</label>
+          <label class="toggle-default"><input type="checkbox" id="tdf"> デフォルトON</label>
+        </div>
       </div>
       <div class="section-body">
         <input type="password" id="tt" placeholder="Access Token">
@@ -290,6 +287,25 @@
       </div>
     </div>
 
+    <!-- Mastodon（3番目） -->
+    <div class="section" data-platform="mastodon">
+      <div class="section-header">
+        <span class="platform-icon">
+          🐘 Mastodon
+          <span class="shortcut-badge"><kbd>Alt</kbd>+<kbd>3</kbd></span>
+        </span>
+        <div class="header-controls">
+          <label class="toggle-show"><input type="checkbox" id="mv" checked> 表示</label>
+          <label class="toggle-default"><input type="checkbox" id="md"> デフォルトON</label>
+        </div>
+      </div>
+      <div class="section-body">
+        <input type="text"     id="mu" placeholder="Instance URL  (例: https://mastodon.social)">
+        <input type="password" id="mk" placeholder="Access Token">
+        <p class="hint">Settings → Development → New Application でトークンを発行してください。</p>
+      </div>
+    </div>
+
     <!-- 画像アップローダー（Threads 画像投稿用） -->
     <div class="section" data-platform="catbox">
       <div class="section-header">
@@ -300,7 +316,6 @@
         <span class="catbox-badge"><span class="dot"></span>設定不要</span>
       </div>
       <div class="section-body">
-        <!-- アップローダー選択 -->
         <div style="display:flex;gap:8px;">
           <label class="uploader-radio">
             <input type="radio" name="uploader" id="ul-catbox" value="catbox" checked>
@@ -311,7 +326,6 @@
             <span>🗂 litterbox<br><small>期限付き</small></span>
           </label>
         </div>
-        <!-- litterbox 有効期限（litterbox選択時のみ表示） -->
         <div id="litterbox-opts" style="display:none;">
           <select id="litterbox-time" style="width:100%;background:#fff;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;outline:none;">
             <option value="1h">1時間後に削除</option>
@@ -334,8 +348,42 @@
 
   </div>
 
+  <!-- ショートカット一覧 -->
   <div class="shortcut-tip">
-    投稿時のショートカット: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> または <kbd>Alt</kbd>+<kbd>Enter</kbd>
+    <div class="tip-title-row">
+      <span class="tip-title">⌨️ キーボードショートカット</span>
+      <label class="alt-toggle">
+        <input type="checkbox" id="alt-sc-enabled" checked>
+        <span class="alt-toggle-track"><span class="alt-toggle-thumb"></span></span>
+        <span class="alt-toggle-label">Alt+0〜3 を使用する</span>
+      </label>
+    </div>
+
+    <div class="shortcut-block" id="alt-sc-block">
+      <div class="shortcut-row">
+        <div class="shortcut-keys"><kbd>Alt</kbd>+<kbd>0</kbd></div>
+        <span class="shortcut-desc">全チェックボックスを一括 ON / OFF</span>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-keys"><kbd>Alt</kbd>+<kbd>1</kbd></div>
+        <span class="shortcut-desc">🦋 Bluesky を ON / OFF</span>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-keys"><kbd>Alt</kbd>+<kbd>2</kbd></div>
+        <span class="shortcut-desc">🧵 Threads を ON / OFF</span>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-keys"><kbd>Alt</kbd>+<kbd>3</kbd></div>
+        <span class="shortcut-desc">🐘 Mastodon を ON / OFF</span>
+      </div>
+    </div>
+
+    <div class="shortcut-divider"></div>
+
+    <div class="shortcut-row">
+      <div class="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd></div>
+      <span class="shortcut-desc">クロスポスト実行（チェックON時のみ）</span>
+    </div>
   </div>
 
   <footer>

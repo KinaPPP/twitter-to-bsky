@@ -88,6 +88,7 @@ chrome.storage.sync.get({
   threads_crosspost_checked:   false,
   threads_token_issued_at:     '',
   threads_visible:             true,
+  alt_shortcuts_enabled:       true,
 }, (items) => {
   $('bh').value    = items.bsky_handle;
   $('bp').value    = items.bsky_app_password;
@@ -106,6 +107,10 @@ chrome.storage.sync.get({
   $('litterbox-opts').style.display = items.uploader === 'litterbox' ? '' : 'none';
   $('mv').checked  = items.mastodon_visible;
   $('tv').checked  = items.threads_visible;
+  // Alt+0〜3 ショートカット設定
+  const altEnabled = items.alt_shortcuts_enabled;
+  $('alt-sc-enabled').checked = altEnabled;
+  $('alt-sc-block').classList.toggle('disabled', !altEnabled);
   updateExpiryUI(items.threads_token_issued_at, items.threads_access_token);
 });
 
@@ -116,6 +121,11 @@ document.querySelectorAll('input[name="uploader"]').forEach(r => {
   r.addEventListener('change', () => {
     $('litterbox-opts').style.display = r.value === 'litterbox' ? '' : 'none';
   });
+});
+
+// Alt+0〜3 ショートカット切り替え（即時UIフィードバック）
+$('alt-sc-enabled').addEventListener('change', () => {
+  $('alt-sc-block').classList.toggle('disabled', !$('alt-sc-enabled').checked);
 });
 
 // ----------------------------------------------------------------
@@ -235,6 +245,7 @@ $('sv').addEventListener('click', () => {
       litterbox_time:              $('litterbox-time').value,
       mastodon_visible:            $('mv').checked,
       threads_visible:             $('tv').checked,
+      alt_shortcuts_enabled:       $('alt-sc-enabled').checked,
     }, () => {
       const msg = $('status');
       msg.textContent = '✓ 保存しました';
