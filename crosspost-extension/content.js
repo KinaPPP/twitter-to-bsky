@@ -334,13 +334,6 @@
          2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000]
       : [1000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000];
 
-    // トースト表示用のラベル変換
-    const toastLabel = isCarousel ? 'Threads カルーセル公開待ち…'
-                     : label.startsWith('IMAGE[') ? `Threads 画像処理中 (${label.match(/\d+\/\d+/)?.[0]})…`
-                     : label === 'IMAGE' ? 'Threads 画像処理中…'
-                     : 'Threads テキスト処理中…';
-    updateToast(toastLabel);
-
     for (let i = 0; i < intervals.length; i++) {
       await new Promise(r => setTimeout(r, intervals[i]));
       const statusResp = await bgFetch({
@@ -402,20 +395,17 @@
     // Bluesky未設定  → catbox.moe / litterbox にフォールバック
     let imageUrls;
     if (settings.bsky_handle && settings.bsky_app_password) {
-      updateToast(`Bluesky CDN に画像をアップロード中… (${targetImages.length}枚)`);
       try {
         imageUrls = await uploadViaBskyCdn(targetImages);
         console.log('[Crosspost] Bluesky CDN URLs:', imageUrls);
       } catch (e) {
         console.warn('[Crosspost] Bluesky CDN 失敗、catboxにフォールバック:', e.message);
         const uploaderName = settings.uploader === 'litterbox' ? 'litterbox' : 'catbox.moe';
-        updateToast(`${uploaderName} に画像をアップロード中… (${targetImages.length}枚)`);
         imageUrls = await uploadAllToHost(targetImages);
         console.log('[Crosspost] catbox URLs (fallback):', imageUrls);
       }
     } else {
       const uploaderName = settings.uploader === 'litterbox' ? 'litterbox' : 'catbox.moe';
-      updateToast(`${uploaderName} に画像をアップロード中… (${targetImages.length}枚)`);
       imageUrls = await uploadAllToHost(targetImages);
       console.log('[Crosspost] catbox URLs:', imageUrls);
     }
@@ -438,7 +428,6 @@
 
     // ---- 画像 2〜4 枚: CAROUSEL 投稿 ----
     // 子コンテナは順番に作成（Threads API は並列リクエストに非対応）
-    updateToast('Threads カルーセル処理中…');
     const childIds = [];
     for (let i = 0; i < catboxUrls.length; i++) {
       const resp = await bgFetch({
@@ -894,11 +883,6 @@
     }
   };
 
-  // processing トーストのメッセージだけを更新（スピナーは維持）
-  const updateToast = (msg) => {
-    const span = document.querySelector('#cross-toast span:last-child');
-    if (span) span.textContent = msg;
-  };
 
   // ----------------------------------------------------------------
   //  イベントハンドラー
@@ -1098,7 +1082,7 @@
 
       // toolBar div の直後に挿入
       tb.parentNode.insertBefore(bar, tb.nextSibling);
-      console.log('[Crosspost] checkboxes injected ✓');
+      console.debug('[Crosspost] checkboxes injected ✓');
     });
   };
 
@@ -1107,6 +1091,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.24.1 loaded ✓');
+  console.log('[Crosspost] v0.24.2 loaded ✓');
 
 })();
