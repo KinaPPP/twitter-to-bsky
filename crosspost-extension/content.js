@@ -16,6 +16,7 @@
 
   const POST_TOOLBAR_SELECTOR = 'div[data-testid="toolBar"]:not(.cross-injected)';
   const RE_YOUTUBE = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+  const RE_SPOTIFY = /open\.spotify\.com\/(intl-[a-z]+\/)?(?:track|album|artist|playlist)\/[A-Za-z0-9]+/i;
   const THREADS_MAX_IMAGES = 4;
 
   let is_processing = false;
@@ -717,11 +718,34 @@
           }
         }
 
-        // ② Twitterカードなし → background.js 経由で直接OGP取得（Spotifyなど）
+        // ② Twitterカードなし → Spotify oEmbed 優先、それ以外は直接OGP取得
         if (!embed && textUrl) {
-          const ogp = await fetchOgp(textUrl);
-          if (ogp) {
-            embed = await buildExternalEmbed(auth, textUrl, ogp.title, ogp.description, ogp.imageUrl);
+          const spotifyMatch = textUrl.match(RE_SPOTIFY);
+          if (spotifyMatch) {
+            // Spotify: oEmbed API でアーティスト名・サムネイルを取得
+            console.log('[Crosspost] Spotify oEmbed 取得中:', textUrl);
+            try {
+              const oembedResp = await bgFetch({
+                url: `https://open.spotify.com/oembed?url=${encodeURIComponent(textUrl)}`,
+                method: 'GET',
+              });
+              const oembed = oembedResp.data;
+              console.log('[Crosspost] Spotify oEmbed:', oembed);
+              if (oembed?.title) {
+                const thumbUrl = oembed.thumbnail_url || null;
+                embed = await buildExternalEmbed(auth, textUrl, oembed.title, oembed.provider_name || 'Spotify', thumbUrl);
+              }
+            } catch (e) {
+              console.warn('[Crosspost] Spotify oEmbed 失敗:', e.message);
+            }
+          }
+
+          // Spotify以外 or Spotify失敗時 → 通常OGP取得
+          if (!embed) {
+            const ogp = await fetchOgp(textUrl);
+            if (ogp) {
+              embed = await buildExternalEmbed(auth, textUrl, ogp.title, ogp.description, ogp.imageUrl);
+            }
           }
         }
       }
@@ -1091,6 +1115,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.24.2 loaded ✓');
+  console.log('[Crosspost] v0.24.3 loaded ✓');
 
 })();

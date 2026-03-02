@@ -98,6 +98,7 @@ All three platforms are posted in **parallel** for maximum speed.
 |---------|---------|
 | Version | Changes |
 |---------|---------|\
+| v0.24.3 | Add Spotify oEmbed support for Bluesky link cards (artist/album/track/playlist); falls back to OGP on failure |
 | v0.24.2 | Simplify processing toast to single "クロスポスト中…" message; demote "checkboxes injected" log to console.debug |
 | v0.24.1 | Processing toast stays visible throughout crosspost (spinner + step-by-step messages); auto-replaced by success/error on completion |
 | v0.24.0 | Use Bluesky CDN (cdn.bsky.app) as Threads image relay when Bluesky is configured — eliminates catbox.moe dependency for Bluesky users; catbox remains as fallback when Bluesky is not configured |
