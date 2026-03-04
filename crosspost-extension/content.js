@@ -506,7 +506,7 @@
   // ----------------------------------------------------------------
   async function fetchOgp(url) {
     try {
-      // OGP取得専用: 10秒でタイムアウト（通常の bgFetch は60秒）
+      // OGP取得専用: バイナリで取得して charset 自動検出（FlyFreeと同方式）
       const resp = await new Promise((resolve, reject) => {
         const id   = ++_portIdCounter;
         const port = chrome.runtime.connect({ name: 'crosspost-fetch' });
@@ -522,15 +522,37 @@
         });
         port.onDisconnect.addListener(() => {
           clearTimeout(timer);
-          resolve({ ok: false, text: '' }); // タイムアウト時はエラーにしない
+          resolve({ ok: false, base64: '' });
         });
-        port.postMessage({ type: 'FETCH', id, url, method: 'GET', headers: {
+        port.postMessage({ type: 'FETCH', id, url, method: 'GET', responseType: 'binary', headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
         }});
       });
-      const html = resp.text || (typeof resp.data === 'string' ? resp.data : '') || '';
+
+      // base64 → ArrayBuffer → charset検出 → 正しいエンコーディングでデコード
+      let html = '';
+      if (resp.base64) {
+        const bin    = atob(resp.base64);
+        const bytes  = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const buf    = bytes.buffer;
+
+        // まず UTF-8 でデコードして charset を確認
+        const utf8Html = new TextDecoder('utf-8').decode(buf);
+        const charsetMatch = utf8Html.match(/<meta[^>]+charset=["']?([A-Za-z0-9\-]+)["']?/i)
+                          || utf8Html.match(/charset=([A-Za-z0-9\-]+)/i);
+        const charset = charsetMatch ? charsetMatch[1].toLowerCase() : 'utf-8';
+        console.log('[Crosspost] OGP charset:', charset);
+
+        // UTF-8以外（Shift-JIS, EUC-JPなど）は再デコード
+        html = (charset === 'utf-8' || charset === 'utf8')
+          ? utf8Html
+          : new TextDecoder(charset).decode(buf);
+      } else {
+        html = resp.text || (typeof resp.data === 'string' ? resp.data : '') || '';
+      }
 
       const getMeta = (prop) => {
         // og: プロパティ
@@ -548,8 +570,14 @@
 
       const title       = getMeta('title')       || (titleTag ? titleTag[1].trim() : null);
       const description = getMeta('description') || '';
-      const imageUrl    = getMeta('image');
+      let   imageUrl    = getMeta('image');
 
+      // og:image が相対URLの場合は絶対URLに変換
+      if (imageUrl) {
+        try { imageUrl = new URL(imageUrl, url).href; } catch (_) {}
+      }
+
+      console.log('[Crosspost] OGP result:', { title, imageUrl });
 
       // HTML エンティティのデコード
       const decode = (str) => str
@@ -1115,6 +1143,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.24.3 loaded ✓');
+  console.log('[Crosspost] v0.24.4 loaded ✓');
 
 })();
