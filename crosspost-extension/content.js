@@ -584,9 +584,12 @@
         .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&nbsp;/g, ' ');
 
+      // title が取れなかった場合は null を返してカードなし扱いにする
+      if (!title) return null;
+
       return {
         title:       decode(title),
-        description: decode(description),
+        description: decode(description || ''),
         imageUrl,
       };
     } catch (e) {
@@ -1143,6 +1146,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.24.4 loaded ✓');
+  console.log('[Crosspost] v0.24.5 loaded ✓');
 
 })();

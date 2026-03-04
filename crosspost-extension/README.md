@@ -98,6 +98,7 @@ All three platforms are posted in **parallel** for maximum speed.
 |---------|---------|
 | Version | Changes |
 |---------|---------|\
+| v0.24.5 | Fix crash when fetchOgp returns null title (decode() called on null) |
 | v0.24.4 | Improve fetchOgp: binary fetch with charset auto-detection (Shift-JIS, EUC-JP, etc.) and relative og:image URL resolution; fixes thumbnail missing on sites like dアニメストア |
 | v0.24.3 | Add Spotify oEmbed support for Bluesky link cards (artist/album/track/playlist); falls back to OGP on failure |
 | v0.24.2 | Simplify processing toast to single "クロスポスト中…" message; demote "checkboxes injected" log to console.debug |
