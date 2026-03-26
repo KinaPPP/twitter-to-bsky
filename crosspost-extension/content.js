@@ -378,12 +378,22 @@
 
     // ---- 画像なし: テキスト投稿 ----
     if (targetImages.length === 0) {
-      const resp = await bgFetch({
+      let resp = await bgFetch({
         url: `${BASE}/${uid}/threads`, method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ media_type: 'TEXT', text, access_token: token }),
         bodyType: 'json',
       });
+      if (!resp.data?.id) {
+        console.warn('[Crosspost] TEXTコンテナ作成失敗、3秒後にリトライ…');
+        await new Promise(r => setTimeout(r, 3000));
+        resp = await bgFetch({
+          url: `${BASE}/${uid}/threads`, method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ media_type: 'TEXT', text, access_token: token }),
+          bodyType: 'json',
+        });
+      }
       const id = resp.data?.id;
       if (!id) throw new Error(`コンテナ作成失敗: ${resp.data?.error?.message}`);
       await waitForThreadsContainer(id, token, 'TEXT');
@@ -414,12 +424,22 @@
 
     // ---- 画像 1 枚: IMAGE 投稿 ----
     if (catboxUrls.length === 1) {
-      const resp = await bgFetch({
+      let resp = await bgFetch({
         url: `${BASE}/${uid}/threads`, method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ media_type: 'IMAGE', image_url: catboxUrls[0], text, access_token: token }),
         bodyType: 'json',
       });
+      if (!resp.data?.id) {
+        console.warn('[Crosspost] IMAGEコンテナ作成失敗、3秒後にリトライ…');
+        await new Promise(r => setTimeout(r, 3000));
+        resp = await bgFetch({
+          url: `${BASE}/${uid}/threads`, method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ media_type: 'IMAGE', image_url: catboxUrls[0], text, access_token: token }),
+          bodyType: 'json',
+        });
+      }
       const id = resp.data?.id;
       if (!id) throw new Error(`コンテナ作成失敗: ${resp.data?.error?.message}`);
       await waitForThreadsContainer(id, token, 'IMAGE');
@@ -431,7 +451,8 @@
     // 子コンテナは順番に作成（Threads API は並列リクエストに非対応）
     const childIds = [];
     for (let i = 0; i < catboxUrls.length; i++) {
-      const resp = await bgFetch({
+      // 一時的なサーバーエラー対策: 1回だけ自動リトライ（3秒待機）
+      let resp = await bgFetch({
         url: `${BASE}/${uid}/threads`, method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -440,6 +461,19 @@
         }),
         bodyType: 'json',
       });
+      if (!resp.data?.id) {
+        console.warn(`[Crosspost] 子コンテナ[${i + 1}]作成失敗、3秒後にリトライ…`);
+        await new Promise(r => setTimeout(r, 3000));
+        resp = await bgFetch({
+          url: `${BASE}/${uid}/threads`, method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            media_type: 'IMAGE', image_url: catboxUrls[i],
+            is_carousel_item: true, access_token: token,
+          }),
+          bodyType: 'json',
+        });
+      }
       const id = resp.data?.id;
       if (!id) throw new Error(`子コンテナ[${i + 1}]作成失敗: ${resp.data?.error?.message || JSON.stringify(resp.data)}`);
       childIds.push(id);
@@ -1146,6 +1180,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.24.5 loaded ✓');
+  console.log('[Crosspost] v0.24.7 loaded ✓');
 
 })();

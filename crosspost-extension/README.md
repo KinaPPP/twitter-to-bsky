@@ -98,6 +98,8 @@ All three platforms are posted in **parallel** for maximum speed.
 |---------|---------|
 | Version | Changes |
 |---------|---------|\
+| v0.24.7 | Extend auto-retry to TEXT and IMAGE single container creation (was carousel child only) |
+| v0.24.6 | Add single auto-retry (3s delay) for Threads carousel child container creation on unexpected server error |
 | v0.24.5 | Fix crash when fetchOgp returns null title (decode() called on null) |
 | v0.24.4 | Improve fetchOgp: binary fetch with charset auto-detection (Shift-JIS, EUC-JP, etc.) and relative og:image URL resolution; fixes thumbnail missing on sites like dアニメストア |
 | v0.24.3 | Add Spotify oEmbed support for Bluesky link cards (artist/album/track/playlist); falls back to OGP on failure |
