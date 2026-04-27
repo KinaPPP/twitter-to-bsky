@@ -4,6 +4,13 @@
 
 const $ = (id) => document.getElementById(id);
 
+// manifest.json からバージョンを動的取得
+const _mv = chrome.runtime.getManifest().version;
+document.addEventListener('DOMContentLoaded', () => {
+  const badge = $('version-badge');
+  if (badge) badge.textContent = `v${_mv}`;
+});
+
 const TOKEN_LIFETIME_DAYS = 60;
 const WARN_DAYS           = 14;
 const DANGER_DAYS         = 7;

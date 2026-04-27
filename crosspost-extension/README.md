@@ -98,6 +98,7 @@ All three platforms are posted in **parallel** for maximum speed.
 |---------|---------|
 | Version | Changes |
 |---------|---------|\
+| v0.25.0 | Append quoted tweet URL to crosspost text on quote-RT; popup version badge now dynamically loaded from manifest.json |
 | v0.24.7 | Extend auto-retry to TEXT and IMAGE single container creation (was carousel child only) |
 | v0.24.6 | Add single auto-retry (3s delay) for Threads carousel child container creation on unexpected server error |
 | v0.24.5 | Fix crash when fetchOgp returns null title (decode() called on null) |

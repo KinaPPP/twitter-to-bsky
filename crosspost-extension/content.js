@@ -850,9 +850,16 @@
     await wakeUpServiceWorker();
     startKeepAlive();
 
-    const text   = root.querySelector('[data-testid="tweetTextarea_0"]')?.innerText || '';
+    let text     = root.querySelector('[data-testid="tweetTextarea_0"]')?.innerText || '';
     const images = Array.from(root.querySelectorAll('[data-testid="attachments"] img'))
                        .filter(i => i.src.startsWith('blob:'));
+
+    // 引用ツイートURLを末尾に追記（引用RTの場合のみ）
+    const quotedUrl = getQuotedTweetUrl();
+    if (quotedUrl) {
+      text = text ? `${text}\n\n${quotedUrl}` : quotedUrl;
+      console.log('[Crosspost] 引用ツイートURL検出:', quotedUrl);
+    }
 
     // 【並列】3プラットフォームへ同時投稿
     const jobs = [
@@ -1044,6 +1051,63 @@
   };
 
   // ----------------------------------------------------------------
+  //  引用ツイートURL取得
+  //  投稿エリア内に表示されている引用元プレビューのURLを返す
+  //  見つからない場合は null
+  // ----------------------------------------------------------------
+  // 引用RT時に保存しておいたURL（引用ボタンクリック時にセット）
+  let _pendingQuoteUrl = null;
+  let _lastRetweetBtnTweetUrl = null; // RTボタンを押した時点で確定したURL
+
+  const getQuotedTweetUrl = () => {
+    if (_pendingQuoteUrl) {
+      const url = _pendingQuoteUrl;
+      _pendingQuoteUrl = null;
+      return url;
+    }
+    return null;
+  };
+
+  // ① RTボタンクリック時: 所属ツイートのURLを一時保存
+  // ② 「引用する」メニュー選択時: ①のURLを _pendingQuoteUrl に昇格
+  const captureQuoteUrl = (e) => {
+    const target = e.target;
+
+    // ① リツイートボタン押下 → 祖先の tweet コンテナから URL を取得
+    const rtBtn = target.closest('[data-testid="retweet"]');
+    if (rtBtn) {
+      const tweetEl = rtBtn.closest('[data-testid="tweet"]');
+      if (tweetEl) {
+        for (const a of tweetEl.querySelectorAll('a[href]')) {
+          const m = (a.getAttribute('href') || '').match(/^\/([^\/]+)\/status\/(\d+)/);
+          if (m) {
+            _lastRetweetBtnTweetUrl = `https://x.com/${m[1]}/status/${m[2]}`;
+            console.log('[Crosspost] RTボタン: URL一時保存:', _lastRetweetBtnTweetUrl);
+            return;
+          }
+        }
+      }
+      return;
+    }
+
+    // ② 「引用する」メニュー選択 → ①のURLを確定
+    const menuItem = target.closest('[role="menuitem"]');
+    if (!menuItem) return;
+    const itemText = menuItem.textContent || '';
+    if (!itemText.includes('引用') && !itemText.toLowerCase().includes('quote')) return;
+
+    if (_lastRetweetBtnTweetUrl) {
+      _pendingQuoteUrl = _lastRetweetBtnTweetUrl;
+      _lastRetweetBtnTweetUrl = null;
+      console.log('[Crosspost] 引用URL確定:', _pendingQuoteUrl);
+    } else {
+      console.warn('[Crosspost] 引用URL確定失敗（RTボタンURL未保存）');
+    }
+  };
+
+  document.addEventListener('click', captureQuoteUrl, true);
+
+ // ----------------------------------------------------------------
   //  返信モード判定（ダイアログ内のみ対象・ホーム画面では絶対に誤検知しない）
   // ----------------------------------------------------------------
   const isReplyMode = (toolbarEl) => {
@@ -1180,6 +1244,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.24.7 loaded ✓');
+  console.log('[Crosspost] v0.25.0 loaded ✓');
 
 })();
