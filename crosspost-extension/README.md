@@ -98,6 +98,8 @@ All three platforms are posted in **parallel** for maximum speed.
 |---------|---------|
 | Version | Changes |
 |---------|---------|\
+| v0.26.1 | Fix Twitter card thumbnail fetch (pbs.twimg.com requires Cookie — switched to direct fetch() in content script). Fix Twitter card detection (replaced ancestor traversal with direct querySelectorAll + compareDocumentPosition). |
+| v0.26.0 | Internal refactor: Bluesky CDN relay for Threads is now only used when Bluesky is also being posted to (eliminates orphan blob uploads). Bsky+Threads dual posts now share a single blob upload and authentication. Threads-only posts always use catbox.moe / litterbox. No user-facing setting changes. |
 | v0.25.0 | Append quoted tweet URL to crosspost text on quote-RT; popup version badge now dynamically loaded from manifest.json |
 | v0.24.7 | Extend auto-retry to TEXT and IMAGE single container creation (was carousel child only) |
 | v0.24.6 | Add single auto-retry (3s delay) for Threads carousel child container creation on unexpected server error |

@@ -368,6 +368,211 @@
   //  Threads 投稿
   //  【並列】catbox アップロード、子コンテナ作成、ポーリングを並列化
   // ----------------------------------------------------------------
+  // ----------------------------------------------------------------
+  //  Bluesky 認証ヘルパー（モジュールスコープの settings を参照）
+  // ----------------------------------------------------------------
+  async function bskyAuth() {
+    const resp = await bgFetch({
+      url: 'https://bsky.social/xrpc/com.atproto.server.createSession',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: settings.bsky_handle,
+        password:   settings.bsky_app_password,
+      }),
+      bodyType: 'json',
+    });
+    if (!resp.data?.accessJwt) {
+      throw new Error('Bluesky 認証失敗: ' + JSON.stringify(resp.data));
+    }
+    console.log('[Crosspost] Bluesky 認証OK, did:', resp.data.did);
+    return resp.data; // { accessJwt, did, ... }
+  }
+
+  // ----------------------------------------------------------------
+  //  Bluesky 画像アップロードヘルパー
+  //  画像群を並列アップロードし { blobRef, cid } の配列を返す
+  // ----------------------------------------------------------------
+  async function uploadImagesToBsky(images, auth) {
+    return Promise.all(images.map(async (img, i) => {
+      let blob = await fetch(img.src).then(r => r.blob());
+      blob = await compressForBsky(blob);
+      const b64 = await blobToBase64(blob);
+      const upResp = await bgFetch({
+        url:     'https://bsky.social/xrpc/com.atproto.repo.uploadBlob',
+        method:  'POST',
+        headers: {
+          'Authorization': `Bearer ${auth.accessJwt}`,
+          'Content-Type':  blob.type,
+        },
+        body: b64, bodyType: 'base64',
+      });
+      const blobRef = upResp.data?.blob;
+      const cid     = blobRef?.ref?.$link;
+      if (!blobRef || !cid) {
+        throw new Error(`画像[${i + 1}] uploadBlob 失敗: ${JSON.stringify(upResp.data)}`);
+      }
+      console.log(`[Crosspost] 画像[${i + 1}] CID: ${cid}`);
+      return { blobRef, cid };
+    }));
+  }
+
+  // ----------------------------------------------------------------
+  //  Bluesky 画像投稿レコード作成ヘルパー
+  //  すでに upload 済みの blobRef 配列を受け取り createRecord を実行する
+  //  成功時は { uri, cid } を返す（将来のログ追加に備えた入り口確保）
+  // ----------------------------------------------------------------
+  async function createBskyImageRecord(text, blobRefs, auth) {
+    const embed = {
+      $type: 'app.bsky.embed.images',
+      images: blobRefs.map(b => ({ image: b, alt: '' })),
+    };
+    const postResp = await bgFetch({
+      url: 'https://bsky.social/xrpc/com.atproto.repo.createRecord',
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${auth.accessJwt}`,
+      },
+      body: JSON.stringify({
+        repo:       auth.did,
+        collection: 'app.bsky.feed.post',
+        record: {
+          $type:     'app.bsky.feed.post',
+          text,
+          facets:    getFacets(text),
+          createdAt: new Date().toISOString(),
+          embed,
+        },
+      }),
+      bodyType: 'json',
+    });
+    if (!postResp.ok && !postResp.data?.uri) {
+      throw new Error('Bluesky 投稿失敗: ' + JSON.stringify(postResp.data));
+    }
+    return { uri: postResp.data.uri, cid: postResp.data.cid };
+  }
+
+  // ----------------------------------------------------------------
+  //  Threads 画像投稿ヘルパー
+  //  取得済みの public URL 配列を受け取り IMAGE or CAROUSEL として投稿する
+  //  Bsky CDN URL でも catbox URL でも形式は問わない
+  // ----------------------------------------------------------------
+  async function publishThreadsWithImageUrls(text, imageUrls) {
+    const { threads_access_token: token, threads_user_id: uid } = settings;
+    if (!token) throw new Error('アクセストークンが未設定です');
+    if (!uid)   throw new Error('User ID が未設定です');
+
+    const BASE = 'https://graph.threads.net/v1.0';
+
+    // ---- 画像 1 枚: IMAGE 投稿 ----
+    if (imageUrls.length === 1) {
+      let resp = await bgFetch({
+        url: `${BASE}/${uid}/threads`, method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ media_type: 'IMAGE', image_url: imageUrls[0], text, access_token: token }),
+        bodyType: 'json',
+      });
+      if (!resp.data?.id) {
+        console.warn('[Crosspost] IMAGEコンテナ作成失敗、3秒後にリトライ…');
+        await new Promise(r => setTimeout(r, 3000));
+        resp = await bgFetch({
+          url: `${BASE}/${uid}/threads`, method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ media_type: 'IMAGE', image_url: imageUrls[0], text, access_token: token }),
+          bodyType: 'json',
+        });
+      }
+      const id = resp.data?.id;
+      if (!id) throw new Error(`コンテナ作成失敗: ${resp.data?.error?.message}`);
+      await waitForThreadsContainer(id, token, 'IMAGE');
+      await publishThreadsContainer(uid, id, token);
+      return;
+    }
+
+    // ---- 画像 2〜4 枚: CAROUSEL 投稿 ----
+    // 子コンテナは順番に作成（Threads API は並列リクエストに非対応）
+    const childIds = [];
+    for (let i = 0; i < imageUrls.length; i++) {
+      let resp = await bgFetch({
+        url: `${BASE}/${uid}/threads`, method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          media_type: 'IMAGE', image_url: imageUrls[i],
+          is_carousel_item: true, access_token: token,
+        }),
+        bodyType: 'json',
+      });
+      if (!resp.data?.id) {
+        console.warn(`[Crosspost] 子コンテナ[${i + 1}]作成失敗、3秒後にリトライ…`);
+        await new Promise(r => setTimeout(r, 3000));
+        resp = await bgFetch({
+          url: `${BASE}/${uid}/threads`, method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            media_type: 'IMAGE', image_url: imageUrls[i],
+            is_carousel_item: true, access_token: token,
+          }),
+          bodyType: 'json',
+        });
+      }
+      const id = resp.data?.id;
+      if (!id) throw new Error(`子コンテナ[${i + 1}]作成失敗: ${resp.data?.error?.message || JSON.stringify(resp.data)}`);
+      childIds.push(id);
+    }
+
+    await Promise.all(
+      childIds.map((id, i) => waitForThreadsContainer(id, token, `IMAGE[${i + 1}/${childIds.length}]`))
+    );
+
+    const carouselResp = await bgFetch({
+      url: `${BASE}/${uid}/threads`, method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        media_type: 'CAROUSEL', children: childIds.join(','), text, access_token: token,
+      }),
+      bodyType: 'json',
+    });
+    const carouselId = carouselResp.data?.id;
+    if (!carouselId) throw new Error(`カルーセルコンテナ作成失敗: ${carouselResp.data?.error?.message}`);
+
+    await waitForThreadsContainer(carouselId, token, 'CAROUSEL');
+    await publishThreadsContainer(uid, carouselId, token);
+  }
+
+  // ----------------------------------------------------------------
+  //  Bluesky + Threads 共有パス
+  //  両方チェック時: 認証1回・blob upload1回・record参照済みblobをThreadsにも転用
+  // ----------------------------------------------------------------
+  async function postToBskyAndThreadsShared(text, images, root) {
+    const auth = await bskyAuth();
+    const targetImages = images.slice(0, THREADS_MAX_IMAGES);
+    const uploaded = await uploadImagesToBsky(targetImages, auth);
+    const cdnUrls = uploaded.map(u =>
+      `https://cdn.bsky.app/img/feed_fullsize/plain/${auth.did}/${u.cid}@jpeg`
+    );
+    console.log('[Crosspost] 共有パス: blob upload完了, CDN URLs:', cdnUrls);
+
+    // Bsky record 作成 と Threads 投稿 を並列実行
+    const [bskyRes, threadsRes] = await Promise.allSettled([
+      createBskyImageRecord(text, uploaded.map(u => u.blobRef), auth),
+      publishThreadsWithImageUrls(text, cdnUrls),
+    ]);
+
+    return [
+      {
+        platform: 'Bluesky',
+        ok:    bskyRes.status === 'fulfilled',
+        error: bskyRes.reason?.message,
+      },
+      {
+        platform: 'Threads',
+        ok:    threadsRes.status === 'fulfilled',
+        error: threadsRes.reason?.message,
+      },
+    ];
+  }
+
   async function postToThreads(text, images) {
     const { threads_access_token: token, threads_user_id: uid } = settings;
     if (!token) throw new Error('アクセストークンが未設定です');
@@ -401,103 +606,10 @@
       return;
     }
 
-    // ---- 画像URL取得: Bluesky CDN優先 → catboxフォールバック ----
-    // Bluesky設定済み → Bluesky CDNを中継に使用（外部サービス不要）
-    // Bluesky未設定  → catbox.moe / litterbox にフォールバック
-    let imageUrls;
-    if (settings.bsky_handle && settings.bsky_app_password) {
-      try {
-        imageUrls = await uploadViaBskyCdn(targetImages);
-        console.log('[Crosspost] Bluesky CDN URLs:', imageUrls);
-      } catch (e) {
-        console.warn('[Crosspost] Bluesky CDN 失敗、catboxにフォールバック:', e.message);
-        const uploaderName = settings.uploader === 'litterbox' ? 'litterbox' : 'catbox.moe';
-        imageUrls = await uploadAllToHost(targetImages);
-        console.log('[Crosspost] catbox URLs (fallback):', imageUrls);
-      }
-    } else {
-      const uploaderName = settings.uploader === 'litterbox' ? 'litterbox' : 'catbox.moe';
-      imageUrls = await uploadAllToHost(targetImages);
-      console.log('[Crosspost] catbox URLs:', imageUrls);
-    }
-    const catboxUrls = imageUrls;
-
-    // ---- 画像 1 枚: IMAGE 投稿 ----
-    if (catboxUrls.length === 1) {
-      let resp = await bgFetch({
-        url: `${BASE}/${uid}/threads`, method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ media_type: 'IMAGE', image_url: catboxUrls[0], text, access_token: token }),
-        bodyType: 'json',
-      });
-      if (!resp.data?.id) {
-        console.warn('[Crosspost] IMAGEコンテナ作成失敗、3秒後にリトライ…');
-        await new Promise(r => setTimeout(r, 3000));
-        resp = await bgFetch({
-          url: `${BASE}/${uid}/threads`, method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ media_type: 'IMAGE', image_url: catboxUrls[0], text, access_token: token }),
-          bodyType: 'json',
-        });
-      }
-      const id = resp.data?.id;
-      if (!id) throw new Error(`コンテナ作成失敗: ${resp.data?.error?.message}`);
-      await waitForThreadsContainer(id, token, 'IMAGE');
-      await publishThreadsContainer(uid, id, token);
-      return;
-    }
-
-    // ---- 画像 2〜4 枚: CAROUSEL 投稿 ----
-    // 子コンテナは順番に作成（Threads API は並列リクエストに非対応）
-    const childIds = [];
-    for (let i = 0; i < catboxUrls.length; i++) {
-      // 一時的なサーバーエラー対策: 1回だけ自動リトライ（3秒待機）
-      let resp = await bgFetch({
-        url: `${BASE}/${uid}/threads`, method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          media_type: 'IMAGE', image_url: catboxUrls[i],
-          is_carousel_item: true, access_token: token,
-        }),
-        bodyType: 'json',
-      });
-      if (!resp.data?.id) {
-        console.warn(`[Crosspost] 子コンテナ[${i + 1}]作成失敗、3秒後にリトライ…`);
-        await new Promise(r => setTimeout(r, 3000));
-        resp = await bgFetch({
-          url: `${BASE}/${uid}/threads`, method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            media_type: 'IMAGE', image_url: catboxUrls[i],
-            is_carousel_item: true, access_token: token,
-          }),
-          bodyType: 'json',
-        });
-      }
-      const id = resp.data?.id;
-      if (!id) throw new Error(`子コンテナ[${i + 1}]作成失敗: ${resp.data?.error?.message || JSON.stringify(resp.data)}`);
-      childIds.push(id);
-    }
-
-    // 【並列】全子コンテナの処理完了を同時に待つ
-    await Promise.all(
-      childIds.map((id, i) => waitForThreadsContainer(id, token, `IMAGE[${i + 1}/${childIds.length}]`))
-    );
-
-    // カルーセル親コンテナ作成
-    const carouselResp = await bgFetch({
-      url: `${BASE}/${uid}/threads`, method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        media_type: 'CAROUSEL', children: childIds.join(','), text, access_token: token,
-      }),
-      bodyType: 'json',
-    });
-    const carouselId = carouselResp.data?.id;
-    if (!carouselId) throw new Error(`カルーセルコンテナ作成失敗: ${carouselResp.data?.error?.message}`);
-
-    await waitForThreadsContainer(carouselId, token, 'CAROUSEL');
-    await publishThreadsContainer(uid, carouselId, token);
+    // ---- 画像あり: catbox/litterbox 経由で URL を取得 → 共通投稿関数へ ----
+    const imageUrls = await uploadAllToHost(targetImages);
+    console.log('[Crosspost] catbox URLs:', imageUrls);
+    await publishThreadsWithImageUrls(text, imageUrls);
   }
 
   // ----------------------------------------------------------------
@@ -509,12 +621,22 @@
     if (imageUrl) {
       try {
         const imgUrl = imageUrl.startsWith('http') ? imageUrl : new URL(imageUrl, uri).href;
-        const imgResp = await bgFetch({ url: imgUrl, method: 'GET', responseType: 'binary' });
-        if (imgResp.base64) {
-          let imgBlob = await (async () => {
+        let imgBlob;
+
+        // pbs.twimg.com は Cookie 必須のため content script から直接 fetch（Cookie が自動送信される）
+        // その他は bgFetch 経由（CORS 回避）
+        if (imgUrl.includes('pbs.twimg.com')) {
+          const resp = await fetch(imgUrl);
+          if (resp.ok) imgBlob = await resp.blob();
+        } else {
+          const imgResp = await bgFetch({ url: imgUrl, method: 'GET', responseType: 'binary' });
+          if (imgResp.base64) {
             const buf = Uint8Array.from(atob(imgResp.base64), c => c.charCodeAt(0)).buffer;
-            return new Blob([buf], { type: imgResp.mimeType || 'image/jpeg' });
-          })();
+            imgBlob = new Blob([buf], { type: imgResp.mimeType || 'image/jpeg' });
+          }
+        }
+
+        if (imgBlob) {
           imgBlob = await compressForBsky(imgBlob);
           const b64 = await blobToBase64(imgBlob);
           const upResp = await bgFetch({
@@ -633,55 +755,6 @@
   }
 
   // ----------------------------------------------------------------
-  //  Bluesky CDN を Threads 画像中継に使用
-  //  uploadBlob → blob.ref.$link (CID) + auth.did → CDN URL → Threads に渡す
-  //  CDN URL形式: https://cdn.bsky.app/img/feed_fullsize/plain/{did}/{cid}@jpeg
-  //  Bluesky設定済みの場合は catbox.moe 不要（外部サービス依存なし）
-  // ----------------------------------------------------------------
-  async function uploadViaBskyCdn(images) {
-    const { bsky_handle, bsky_app_password } = settings;
-
-    // Bluesky 認証
-    const authResp = await bgFetch({
-      url: 'https://bsky.social/xrpc/com.atproto.server.createSession', method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier: bsky_handle, password: bsky_app_password }),
-      bodyType: 'json',
-    });
-    const auth = authResp.data;
-    if (!auth?.accessJwt) throw new Error('Bluesky 認証失敗');
-    console.log('[Crosspost] Bluesky 認証OK, did:', auth.did);
-
-    // 全画像を並列アップロード
-    const blobList = await Promise.all(
-      images.map(img => fetch(img.src).then(r => r.blob()))
-    );
-
-    const cdnUrls = await Promise.all(
-      blobList.map(async (blob, i) => {
-        blob = await compressForBsky(blob);
-        const b64 = await blobToBase64(blob);
-        const upResp = await bgFetch({
-          url: 'https://bsky.social/xrpc/com.atproto.repo.uploadBlob', method: 'POST',
-          headers: { 'Authorization': `Bearer ${auth.accessJwt}`, 'Content-Type': blob.type },
-          body: b64, bodyType: 'base64',
-        });
-        const cid = upResp.data?.blob?.ref?.$link;
-        if (!cid) throw new Error(`画像[${i+1}] CID取得失敗: ${JSON.stringify(upResp.data)}`);
-
-        // CDN URL を2パターン試す → まず cdn.bsky.app
-        const cdnUrl = `https://cdn.bsky.app/img/feed_fullsize/plain/${auth.did}/${cid}@jpeg`;
-        console.log(`[Crosspost] 画像[${i+1}] CID: ${cid}`);
-        console.log(`[Crosspost] 画像[${i+1}] CDN URL: ${cdnUrl}`);
-        return { cdnUrl, fallbackUrl: `https://bsky.social/xrpc/com.atproto.sync.getBlob?did=${auth.did}&cid=${cid}`, cid, did: auth.did };
-      })
-    );
-
-    console.log('[Crosspost] 全CDN URL生成完了:', cdnUrls.map(u => u.cdnUrl));
-    return cdnUrls.map(u => u.cdnUrl);
-  }
-
-  // ----------------------------------------------------------------
   //  Bluesky 投稿
   //  【並列】複数画像を同時アップロード
   // ----------------------------------------------------------------
@@ -689,37 +762,18 @@
     const { bsky_handle, bsky_app_password } = settings;
     if (!bsky_handle || !bsky_app_password) throw new Error('Handle / App Password が未設定です');
 
-    const authResp = await bgFetch({
-      url: 'https://bsky.social/xrpc/com.atproto.server.createSession', method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier: bsky_handle, password: bsky_app_password }),
-      bodyType: 'json',
-    });
-    const auth = authResp.data;
-    if (!auth?.accessJwt) throw new Error('認証失敗: ' + JSON.stringify(authResp.data));
+    const auth = await bskyAuth();
+
+    if (images.length > 0) {
+      const uploaded = await uploadImagesToBsky(images, auth);
+      await createBskyImageRecord(text, uploaded.map(u => u.blobRef), auth);
+      return;
+    }
 
     let embed;
 
-    if (images.length > 0) {
-      // 【並列】全画像を同時アップロード
-      const blobList = await Promise.all(
-        images.map(img => fetch(img.src).then(r => r.blob()))
-      );
-      const embeds = (await Promise.all(
-        blobList.map(async (blob) => {
-          blob = await compressForBsky(blob);
-          const b64 = await blobToBase64(blob);
-          const upResp = await bgFetch({
-            url: 'https://bsky.social/xrpc/com.atproto.repo.uploadBlob', method: 'POST',
-            headers: { 'Authorization': `Bearer ${auth.accessJwt}`, 'Content-Type': blob.type },
-            body: b64, bodyType: 'base64',
-          });
-          return upResp.data?.blob ? { image: upResp.data.blob, alt: '' } : null;
-        })
-      )).filter(Boolean);
-      embed = { $type: 'app.bsky.embed.images', images: embeds };
-
-    } else {
+    // 画像なし: YouTube / OGP / Spotify / Twitterカード embed 経路
+    {
       const ytMatch = text.match(RE_YOUTUBE);
       // YouTube URL
       if (ytMatch) {
@@ -749,22 +803,21 @@
         }
       } else {
         // 一般URL → Twitter のカード DOM から情報を取得
-        // 自分のツイートにURLが含まれる場合のみカードを探す
-        // root全体（primaryColumn）ではなく投稿エリア直近に絞ることで他ツイートのカードを誤取得しない
         const textUrl = text.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,!?]+$/, '');
-        // ツールバーの祖先を遡って投稿エリアのコンテナを特定（ダイアログ or 投稿エリアの直近div）
-        // ツールバーから上位に遡り、テキストエリアも含む最近の共通祖先を投稿エリアとして特定
-        const toolbar = root.querySelector('[data-testid="toolBar"]');
-        let composeArea = null;
-        if (toolbar) {
-          // 祖先を最大10階層遡り、card.wrapper が見つかる最も近い祖先を探す
-          let el = toolbar.parentElement;
-          for (let i = 0; i < 10 && el; i++) {
-            if (el.querySelector('[data-testid="card.wrapper"]')) { composeArea = el; break; }
-            el = el.parentElement;
+        // tweetTextarea_0 の祖先コンテナ内の card.wrapper のみを対象にする
+        // （タイムライン上の他ツイートや広告カードの誤取得を防ぐ）
+        let card = null;
+        if (textUrl) {
+          const textarea = root.querySelector('[data-testid="tweetTextarea_0"]');
+          if (textarea) {
+            let el = textarea.parentElement;
+            for (let i = 0; i < 20 && el; i++) {
+              const found = el.querySelector('[data-testid="card.wrapper"]');
+              if (found) { card = found; break; }
+              el = el.parentElement;
+            }
           }
         }
-        const card = (textUrl && composeArea) ? composeArea.querySelector('[data-testid="card.wrapper"]') : null;
         if (card) {
           // カードのURL・タイトル・説明・サムネイルを DOM から取得
           const cardLink    = card.querySelector('a[href]');
@@ -862,17 +915,44 @@
     }
 
     // 【並列】3プラットフォームへ同時投稿
-    const jobs = [
-      mCb?.checked ? postToMastodon(text, images).then(() => ({ platform: 'Mastodon', ok: true  }))
-                                                  .catch(e  => ({ platform: 'Mastodon', ok: false, error: e.message })) : null,
-      tCb?.checked ? postToThreads(text, images) .then(() => ({ platform: 'Threads',  ok: true  }))
-                                                  .catch(e  => ({ platform: 'Threads',  ok: false, error: e.message })) : null,
-      bCb?.checked ? postToBsky(text, images, root).then(() => ({ platform: 'Bluesky', ok: true  }))
-                                                    .catch(e  => ({ platform: 'Bluesky', ok: false, error: e.message })) : null,
-    ].filter(Boolean);
+    // Bsky+Threads 両方チェック & Bsky設定済みの場合は共有パス（1回の認証・blob uploadで両投稿）
+    const useShared =
+      bCb?.checked && tCb?.checked &&
+      settings.bsky_handle && settings.bsky_app_password &&
+      images.length > 0;
+
+    const jobs = [];
+
+    if (useShared) {
+      jobs.push(
+        postToBskyAndThreadsShared(text, images, root)
+          .catch(e => [
+            { platform: 'Bluesky', ok: false, error: e.message },
+            { platform: 'Threads', ok: false, error: e.message },
+          ])
+      );
+    } else {
+      if (bCb?.checked) jobs.push(
+        postToBsky(text, images, root)
+          .then(() => [{ platform: 'Bluesky', ok: true }])
+          .catch(e  => [{ platform: 'Bluesky', ok: false, error: e.message }])
+      );
+      if (tCb?.checked) jobs.push(
+        postToThreads(text, images)
+          .then(() => [{ platform: 'Threads', ok: true }])
+          .catch(e  => [{ platform: 'Threads', ok: false, error: e.message }])
+      );
+    }
+
+    if (mCb?.checked) jobs.push(
+      postToMastodon(text, images)
+        .then(() => [{ platform: 'Mastodon', ok: true }])
+        .catch(e  => [{ platform: 'Mastodon', ok: false, error: e.message }])
+    );
 
     try {
-      const results = await Promise.all(jobs);
+      const resultsNested = await Promise.all(jobs);
+      const results = resultsNested.flat();
 
       const failed  = results.filter(r => !r.ok);
       const success = results.filter(r =>  r.ok);
@@ -1244,6 +1324,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.25.0 loaded ✓');
+  console.log('[Crosspost] v0.26.1 loaded ✓');
 
 })();
