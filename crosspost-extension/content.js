@@ -42,7 +42,16 @@
       uploader:                   'catbox',
       litterbox_time:             '24h',
       alt_shortcuts_enabled:      true,
-    }, (items) => { settings = items; resolve(items); });
+    }, (items) => {
+      // アプリパスワードが変わっていたらキャッシュを破棄
+      const prevPw = settings?.bsky_app_password;
+      settings = items;
+      if (prevPw && prevPw !== items.bsky_app_password) {
+        chrome.storage.local.remove('bsky_session');
+        console.log('[Crosspost] アプリパスワード変更検出 → Bskyセッションキャッシュ破棄');
+      }
+      resolve(items);
+    });
   });
 
   await loadSettings();
@@ -372,6 +381,46 @@
   //  Bluesky 認証ヘルパー（モジュールスコープの settings を参照）
   // ----------------------------------------------------------------
   async function bskyAuth() {
+    const CACHE_KEY = 'bsky_session';
+    const MARGIN_MS = 5 * 60 * 1000; // 期限5分前に更新
+
+    // ① キャッシュ確認
+    const stored = await new Promise(resolve =>
+      chrome.storage.local.get(CACHE_KEY, r => resolve(r[CACHE_KEY] || null))
+    );
+
+    if (stored?.accessJwt && stored?.expiresAt) {
+      const remaining = stored.expiresAt - Date.now();
+      if (remaining > MARGIN_MS) {
+        console.log('[Crosspost] Bluesky トークンキャッシュ使用（残り', Math.round(remaining / 60000), '分）');
+        return stored; // { accessJwt, refreshJwt, did, expiresAt }
+      }
+
+      // ② アクセストークン期限切れ → refreshSession を試みる
+      if (stored.refreshJwt) {
+        console.log('[Crosspost] Bluesky トークン更新中...');
+        const refreshResp = await bgFetch({
+          url:     'https://bsky.social/xrpc/com.atproto.server.refreshSession',
+          method:  'POST',
+          headers: { 'Authorization': `Bearer ${stored.refreshJwt}` },
+          bodyType: 'json',
+        });
+        if (refreshResp.data?.accessJwt) {
+          const session = {
+            accessJwt:  refreshResp.data.accessJwt,
+            refreshJwt: refreshResp.data.refreshJwt,
+            did:        refreshResp.data.did,
+            expiresAt:  Date.now() + 2 * 60 * 60 * 1000, // 2時間
+          };
+          chrome.storage.local.set({ [CACHE_KEY]: session });
+          console.log('[Crosspost] Bluesky トークン更新OK');
+          return session;
+        }
+        console.warn('[Crosspost] Bluesky refreshSession 失敗、createSession にフォールバック');
+      }
+    }
+
+    // ③ createSession（初回 or refresh 失敗時のみ）
     const resp = await bgFetch({
       url: 'https://bsky.social/xrpc/com.atproto.server.createSession',
       method: 'POST',
@@ -385,8 +434,15 @@
     if (!resp.data?.accessJwt) {
       throw new Error('Bluesky 認証失敗: ' + JSON.stringify(resp.data));
     }
-    console.log('[Crosspost] Bluesky 認証OK, did:', resp.data.did);
-    return resp.data; // { accessJwt, did, ... }
+    const session = {
+      accessJwt:  resp.data.accessJwt,
+      refreshJwt: resp.data.refreshJwt,
+      did:        resp.data.did,
+      expiresAt:  Date.now() + 2 * 60 * 60 * 1000, // 2時間
+    };
+    chrome.storage.local.set({ [CACHE_KEY]: session });
+    console.log('[Crosspost] Bluesky 認証OK（新規セッション）, did:', session.did);
+    return session;
   }
 
   // ----------------------------------------------------------------
@@ -1324,6 +1380,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.26.1 loaded ✓');
+  console.log('[Crosspost] v0.27.1 loaded ✓');
 
 })();
