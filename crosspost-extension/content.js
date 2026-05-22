@@ -282,16 +282,43 @@
   //  Bluesky — facet 生成
   // ----------------------------------------------------------------
   const getFacets = (text) => {
+    const enc = new TextEncoder();
+    const byteStart = (i) => enc.encode(text.slice(0, i)).length;
+    const byteEnd   = (i, len) => enc.encode(text.slice(0, i + len)).length;
+
     const facets = [];
+
+    // URL facet
     for (const match of text.matchAll(/https?:\/\/\S+/g)) {
       facets.push({
         index: {
-          byteStart: new TextEncoder().encode(text.slice(0, match.index)).length,
-          byteEnd:   new TextEncoder().encode(text.slice(0, match.index + match[0].length)).length,
+          byteStart: byteStart(match.index),
+          byteEnd:   byteEnd(match.index, match[0].length),
         },
         features: [{ $type: 'app.bsky.richtext.facet#link', uri: match[0] }],
       });
     }
+
+    // ハッシュタグ facet
+    // Bluesky の仕様: # の直後に英数字・アンダースコア・日本語等を含む1文字以上
+    // 数字のみは無効（例: #123 はタグにならない）
+    // URL の一部の # は除外（マッチが URL facet 範囲内なら skip）
+    const urlRanges = facets.map(f => f.index);
+    for (const match of text.matchAll(/#([\w぀-ゟ゠-ヿ一-鿿０-９ａ-ｚＡ-Ｚ]+)/gu)) {
+      const tag = match[1];
+      // 数字のみのタグは除外
+      if (/^\d+$/.test(tag)) continue;
+      const bs = byteStart(match.index);
+      const be = byteEnd(match.index, match[0].length);
+      // URL facet の範囲内なら除外
+      const inUrl = urlRanges.some(r => bs >= r.byteStart && be <= r.byteEnd);
+      if (inUrl) continue;
+      facets.push({
+        index: { byteStart: bs, byteEnd: be },
+        features: [{ $type: 'app.bsky.richtext.facet#tag', tag }],
+      });
+    }
+
     return facets;
   };
 
@@ -1380,6 +1407,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.27.1 loaded ✓');
+  console.log('[Crosspost] v0.27.2 loaded ✓');
 
 })();

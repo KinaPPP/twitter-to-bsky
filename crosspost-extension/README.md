@@ -98,6 +98,7 @@ All three platforms are posted in **parallel** for maximum speed.
 |---------|---------|
 | Version | Changes |
 |---------|---------|\
+| v0.27.2 | Add hashtag facets to Bluesky posts (app.bsky.richtext.facet#tag). Japanese text + English hashtag byte offsets correctly calculated via TextEncoder. Numeric-only tags excluded per AT Protocol spec. |
 | v0.27.1 | Fix Bluesky App Password link URL (bsky.social → bsky.app). |
 | v0.27.0 | Cache Bluesky auth token in chrome.storage.local (2-hour reuse, refreshSession on expiry, createSession only when necessary). Auto-invalidate cache on app password change. Prevents RateLimitExceeded on createSession endpoint. |
 | v0.26.1 | Fix Twitter card thumbnail fetch (pbs.twimg.com requires Cookie — switched to direct fetch() in content script). Fix Twitter card detection (replaced ancestor traversal with direct querySelectorAll + compareDocumentPosition). |
