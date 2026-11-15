@@ -285,40 +285,23 @@
     const enc = new TextEncoder();
     const byteStart = (i) => enc.encode(text.slice(0, i)).length;
     const byteEnd   = (i, len) => enc.encode(text.slice(0, i + len)).length;
-
     const facets = [];
-
-    // URL facet
     for (const match of text.matchAll(/https?:\/\/\S+/g)) {
       facets.push({
-        index: {
-          byteStart: byteStart(match.index),
-          byteEnd:   byteEnd(match.index, match[0].length),
-        },
+        index: { byteStart: byteStart(match.index), byteEnd: byteEnd(match.index, match[0].length) },
         features: [{ $type: 'app.bsky.richtext.facet#link', uri: match[0] }],
       });
     }
-
-    // ハッシュタグ facet
-    // Bluesky の仕様: # の直後に英数字・アンダースコア・日本語等を含む1文字以上
-    // 数字のみは無効（例: #123 はタグにならない）
-    // URL の一部の # は除外（マッチが URL facet 範囲内なら skip）
     const urlRanges = facets.map(f => f.index);
-    for (const match of text.matchAll(/#([\w぀-ゟ゠-ヿ一-鿿０-９ａ-ｚＡ-Ｚ]+)/gu)) {
-      const tag = match[1];
-      // 数字のみのタグは除外
-      if (/^\d+$/.test(tag)) continue;
-      const bs = byteStart(match.index);
-      const be = byteEnd(match.index, match[0].length);
-      // URL facet の範囲内なら除外
-      const inUrl = urlRanges.some(r => bs >= r.byteStart && be <= r.byteEnd);
-      if (inUrl) continue;
+    for (const match of text.matchAll(/#([\w\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff\uff10-\uff19\uff41-\uff5a\uff21-\uff3a]+)/gu)) {
+      if (/^\d+$/.test(match[1])) continue;
+      const bs = byteStart(match.index), be = byteEnd(match.index, match[0].length);
+      if (urlRanges.some(r => bs >= r.byteStart && bs < r.byteEnd)) continue;
       facets.push({
         index: { byteStart: bs, byteEnd: be },
-        features: [{ $type: 'app.bsky.richtext.facet#tag', tag }],
+        features: [{ $type: 'app.bsky.richtext.facet#tag', tag: match[1] }],
       });
     }
-
     return facets;
   };
 
@@ -987,6 +970,10 @@
     startKeepAlive();
 
     let text     = root.querySelector('[data-testid="tweetTextarea_0"]')?.innerText || '';
+    console.log('[Crosspost] raw text:', JSON.stringify(text));
+    // 空行が2重になる対策: 3つ以上連続する改行は空行1つ(\n\n)にまとめる
+    text = text.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n');
+    console.log('[Crosspost] normalized text:', JSON.stringify(text));
     const images = Array.from(root.querySelectorAll('[data-testid="attachments"] img'))
                        .filter(i => i.src.startsWith('blob:'));
 
@@ -1407,6 +1394,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.27.2 loaded ✓');
+  console.log('[Crosspost] v0.27.3 loaded ✓');
 
 })();
