@@ -970,10 +970,8 @@
     startKeepAlive();
 
     let text     = root.querySelector('[data-testid="tweetTextarea_0"]')?.innerText || '';
-    console.log('[Crosspost] raw text:', JSON.stringify(text));
     // 空行が2重になる対策: 3つ以上連続する改行は空行1つ(\n\n)にまとめる
     text = text.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n');
-    console.log('[Crosspost] normalized text:', JSON.stringify(text));
     const images = Array.from(root.querySelectorAll('[data-testid="attachments"] img'))
                        .filter(i => i.src.startsWith('blob:'));
 
@@ -1394,6 +1392,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.27.3 loaded ✓');
+  console.log('[Crosspost] v0.27.4 loaded ✓');
 
 })();

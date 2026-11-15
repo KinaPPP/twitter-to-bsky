@@ -41,15 +41,16 @@ A Chrome Extension (Manifest V3) to crosspost from Twitter/X to **Bluesky**, **M
 - Copy the Access Token and enter it in the extension settings
 
 ### 🧵 Threads
-1. Create an app at [Meta for Developers](https://developers.facebook.com/)
-2. Add the **Threads API** product
-3. Get a long-lived access token (valid for 60 days)
-4. Get your User ID:
+1. Create an app at [Meta for Developers](https://developers.facebook.com/) and add the **Threads API** product
+2. Install the companion Chrome extension **Threadsトークン 取トーくん** ([GitHub](https://github.com/KinaPPP/threads-token-tool) / [guide page](https://kinappp.github.io/threads-token-tool/)). It performs authorization and exchanges the short-lived token for a long-lived one (valid for 60 days) inside the extension — no relay server is used.
+3. In the Meta app's Threads API settings, paste the **redirect URL shown in 取トーくん** into **「有効なOAuthリダイレクトURI」**, then **click the suggestion that appears below the field to confirm it (just pasting is not enough) and press 「変更を保存」**. Otherwise Meta returns an error during authorization. The uninstall / delete callback URL fields may stay empty for personal use unless Meta asks for them.
+4. Enter the **Threads App ID** and **App Secret** in 取トーくん and press 「Threadsと連携してトークンを取得する」. Copy the long-lived token — the tool does not store it.
+5. Get your User ID:
    ```
    GET https://graph.threads.net/v1.0/me?access_token=YOUR_TOKEN
    ```
-5. Enter both values in the extension settings
-6. Use the **「更新」(Refresh)** button before the token expires
+6. Enter the token and User ID in this extension's settings
+7. Use the **「更新」(Refresh)** button before the token expires
 
 ### 📦 Image uploader (for Threads image posts)
 No setup required. Threads API requires a public image URL — this extension handles that automatically using one of the following methods:
@@ -100,7 +101,8 @@ All three platforms are posted in **parallel** for maximum speed.
 |---------|---------|\
 | v0.27.1 | Fix Bluesky App Password link URL (bsky.social → bsky.app). |
 | v0.27.2 | Bluesky hashtag facets (#tag now linked). |
-| v0.27.3 | Fix doubled blank lines on Bluesky (collapse 3+ consecutive newlines); add raw-text debug log. |
+| v0.27.3 | Fix doubled blank lines on Bluesky: Twitter's editor returns 3 newlines per blank line, so runs of 3+ newlines are collapsed to one blank line. |
+| v0.27.4 | Remove debug logs; add Threads token tool (取トーくん) setup guide to README. |
 | v0.27.0 | Cache Bluesky auth token in chrome.storage.local (2-hour reuse, refreshSession on expiry, createSession only when necessary). Auto-invalidate cache on app password change. Prevents RateLimitExceeded on createSession endpoint. |
 | v0.26.1 | Fix Twitter card thumbnail fetch (pbs.twimg.com requires Cookie — switched to direct fetch() in content script). Fix Twitter card detection (replaced ancestor traversal with direct querySelectorAll + compareDocumentPosition). |
 | v0.26.0 | Internal refactor: Bluesky CDN relay for Threads is now only used when Bluesky is also being posted to (eliminates orphan blob uploads). Bsky+Threads dual posts now share a single blob upload and authentication. Threads-only posts always use catbox.moe / litterbox. No user-facing setting changes. |
