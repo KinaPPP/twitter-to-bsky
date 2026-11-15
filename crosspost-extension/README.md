@@ -97,12 +97,10 @@ All three platforms are posted in **parallel** for maximum speed.
 
 | Version | Changes |
 |---------|---------|
-| Version | Changes |
-|---------|---------|\
-| v0.27.1 | Fix Bluesky App Password link URL (bsky.social → bsky.app). |
-| v0.27.2 | Bluesky hashtag facets (#tag now linked). |
-| v0.27.3 | Fix doubled blank lines on Bluesky: Twitter's editor returns 3 newlines per blank line, so runs of 3+ newlines are collapsed to one blank line. |
 | v0.27.4 | Remove debug logs; add Threads token tool (取トーくん) setup guide to README. |
+| v0.27.3 | Fix doubled blank lines on Bluesky: Twitter's editor returns 3 newlines per blank line, so runs of 3+ newlines are collapsed to one blank line. |
+| v0.27.2 | Bluesky hashtag facets (#tag now linked). |
+| v0.27.1 | Fix Bluesky App Password link URL (bsky.social → bsky.app). |
 | v0.27.0 | Cache Bluesky auth token in chrome.storage.local (2-hour reuse, refreshSession on expiry, createSession only when necessary). Auto-invalidate cache on app password change. Prevents RateLimitExceeded on createSession endpoint. |
 | v0.26.1 | Fix Twitter card thumbnail fetch (pbs.twimg.com requires Cookie — switched to direct fetch() in content script). Fix Twitter card detection (replaced ancestor traversal with direct querySelectorAll + compareDocumentPosition). |
 | v0.26.0 | Internal refactor: Bluesky CDN relay for Threads is now only used when Bluesky is also being posted to (eliminates orphan blob uploads). Bsky+Threads dual posts now share a single blob upload and authentication. Threads-only posts always use catbox.moe / litterbox. No user-facing setting changes. |
