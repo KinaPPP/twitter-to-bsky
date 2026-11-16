@@ -97,6 +97,10 @@ All three platforms are posted in **parallel** for maximum speed.
 
 | Version | Changes |
 |---------|---------|
+| v0.27.8 | Revert the Threads-only newline tweak from v0.27.7 (no effect). Threads ignores blank lines by design, even for posts made in the Threads app. |
+| v0.27.7 | Threads: blank lines were displayed one newline short (blank line disappeared), so one extra newline is added to blank-line runs when sending to Threads. |
+| v0.27.6 | Match Twitter's posted result for blank lines: read the draft per Draft.js block, then collapse runs of 2+ blank lines into one (Twitter itself does this on posting), so Bluesky/Threads/Mastodon look the same as the tweet. |
+| v0.27.5 | Read the draft text per Draft.js block (textContent) instead of innerText, so blank lines are posted exactly as typed (v0.27.3 collapsed intentional double blank lines). Falls back to innerText if no blocks are found. |
 | v0.27.4 | Remove debug logs; add Threads token tool (取トーくん) setup guide to README. |
 | v0.27.3 | Fix doubled blank lines on Bluesky: Twitter's editor returns 3 newlines per blank line, so runs of 3+ newlines are collapsed to one blank line. |
 | v0.27.2 | Bluesky hashtag facets (#tag now linked). |

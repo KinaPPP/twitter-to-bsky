@@ -969,9 +969,19 @@
     await wakeUpServiceWorker();
     startKeepAlive();
 
-    let text     = root.querySelector('[data-testid="tweetTextarea_0"]')?.innerText || '';
-    // 空行が2重になる対策: 3つ以上連続する改行は空行1つ(\n\n)にまとめる
-    text = text.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n');
+    // 入力欄の本文を取得（Draft.js のブロック単位）
+    // 空ブロックの innerText は "\n"（<br>）になり、空行が増えて見えるため textContent を使う
+    // さらに Twitter は投稿時に連続する空行を1つにまとめるため、同じ結果になるよう
+    // 3つ以上連続する改行（空行2つ以上）を空行1つ（\n\n）に詰める
+    const getDraftText = (editor) => {
+      if (!editor) return '';
+      const blocks = editor.querySelectorAll('[data-block="true"]');
+      const raw = blocks.length > 0
+        ? Array.from(blocks).map(b => b.textContent).join('\n')
+        : (editor.innerText || '');   // 予備: ブロックが見つからない場合
+      return raw.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n');
+    };
+    let text     = getDraftText(root.querySelector('[data-testid="tweetTextarea_0"]'));
     const images = Array.from(root.querySelectorAll('[data-testid="attachments"] img'))
                        .filter(i => i.src.startsWith('blob:'));
 
@@ -1392,6 +1402,6 @@
   observer.observe(document.body, { childList: true, subtree: true });
   setup();
 
-  console.log('[Crosspost] v0.27.4 loaded ✓');
+  console.log('[Crosspost] v0.27.8 loaded ✓');
 
 })();
